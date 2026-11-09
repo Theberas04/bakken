@@ -4,7 +4,7 @@
 //
 // Let op: bij elke wijziging van de pagina's moet de cachenaam hieronder omhoog,
 // anders houdt de telefoon de oude versie vast.
-var CACHE = 'bakken-schil-v9';
+var CACHE = 'bakken-schil-v11';
 
 var SCHIL = [
   '/',

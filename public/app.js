@@ -307,7 +307,12 @@
       staat.offline = false;
       bewaarGebruiker(uit.gebruiker);
       await laadBakken();
+      // Ook de totalen en de filterchips meteen ophalen: zonder dit mist de
+      // eerste tekening na het inloggen de totaalregel en de chips.
+      await laadOverzicht().catch(function () {});
       ga('bakken');
+      // Een sticker die je scande voordat je inlogde, gaat nu alsnog open.
+      window.dispatchEvent(new Event('bakken-ingelogd'));
     } catch (e) {
       toonInlogFout(e.message);
     }

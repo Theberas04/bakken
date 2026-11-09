@@ -219,8 +219,11 @@ html[data-donker="1"] .printvel .sticker-vak { border-color: #555; }
 .totaalrij b { color: var(--ink); font-weight: 650; }
 
 /* ---------------------------------------------------------------- filters --- */
+/* Rechts ruimte vrijlaten: daar zweeft de + knop, en die mag nooit over een chip
+   heen vallen (dan kun je die chip niet meer aantikken). */
 .filters { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 10px; margin: 0 -2px;
-  -webkit-overflow-scrolling: touch; }
+  scroll-padding: 0 64px; -webkit-overflow-scrolling: touch; }
+.filters::after { content: ''; flex: none; width: 56px; }
 .filters::-webkit-scrollbar { display: none; }
 .chip {
   flex: none; font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px;

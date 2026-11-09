@@ -17,6 +17,10 @@ const WORTEL = path.join(__dirname, '..');
 const DOMEIN = 'werdens' + 'media';
 const TOEGESTANE_IP = ['127.0.0.1', '0.0.0.0', '192.168.1.100'];
 
+// Plaatjes en andere binaire bestanden overslaan: die lezen we anders als tekst en
+// dan vindt de proef toevallige cijfers die op een adres lijken.
+const BINAIR = ['.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.woff', '.woff2', '.ttf', '.wasm', '.zip', '.zst'];
+
 function bestanden(map, uit) {
   for (const naam of fs.readdirSync(map)) {
     if (naam === '.git' || naam === 'node_modules' || naam === 'data') continue;
@@ -24,6 +28,7 @@ function bestanden(map, uit) {
     const staat = fs.statSync(pad);
     if (staat.isDirectory()) { bestanden(pad, uit); continue; }
     if (staat.size > 2 * 1024 * 1024) continue;
+    if (BINAIR.includes(path.extname(naam).toLowerCase())) continue;
     uit.push(pad);
   }
   return uit;
