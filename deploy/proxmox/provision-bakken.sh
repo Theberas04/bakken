@@ -117,6 +117,11 @@ Wants=network-online.target
 Type=simple
 User=$GEBRUIKER
 Group=$GEBRUIKER
+# De dienst draait niet als root. Op een poort lager dan 1024 (standaard 80) mag alleen root
+# luisteren, en zonder deze twee regels stopt node met "listen EACCES: permission denied".
+# Ze geven de dienst precies dat ene recht en niets meer.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 WorkingDirectory=$APP_DIR
 ExecStart=/usr/bin/node $APP_DIR/server.js
 Environment=NODE_ENV=production

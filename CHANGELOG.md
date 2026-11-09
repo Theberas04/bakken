@@ -1,5 +1,11 @@
 # Wat er per versie veranderd is
 
+## 0.5.3 - 9 november 2026
+- De dienst kreeg geen recht om op poort 80 te luisteren en stopte met
+  `listen EACCES: permission denied 0.0.0.0:80`. De dienst krijgt nu precies dat ene recht
+  (`AmbientCapabilities=CAP_NET_BIND_SERVICE`) en draait verder gewoon als gewone gebruiker.
+  Een bestaande installatie krijgt dit recht automatisch bij het bijwerken.
+
 ## 0.5.2 - 9 november 2026
 - Klaagt Proxmox alsnog dat het nummer bezet is ("VM <nr> already exists"), dan wijkt de
   installer automatisch uit naar het volgende vrije nummer in plaats van te stoppen. Dat dekt

@@ -33,6 +33,16 @@ test('het aanmaakscript probeert het volgende nummer als Proxmox toch klaagt', (
   assert.match(aanmaak, /^echo "\$CTID"$/m, 'alleen het gekozen nummer mag op stdout staan');
 });
 
+test('de dienst krijgt het recht om op een lage poort te luisteren', () => {
+  const inricht = lees('provision-bakken.sh');
+  assert.match(inricht, /AmbientCapabilities=CAP_NET_BIND_SERVICE/,
+    'zonder dit recht stopt node met listen EACCES op poort 80');
+  assert.match(inricht, /CapabilityBoundingSet=CAP_NET_BIND_SERVICE/);
+  const bijwerken = lees('update-from-github.sh');
+  assert.match(bijwerken, /AmbientCapabilities/,
+    'een bestaande installatie hoort dit recht bij het bijwerken alsnog te krijgen');
+});
+
 test('elk script dat de installer uitvoert staat in de bestandenlijst', () => {
   const install = lees('install.sh');
   const lijst = install.slice(install.indexOf('FILES=('), install.indexOf(')\n', install.indexOf('FILES=(')));

@@ -1,6 +1,6 @@
 {
-  "versie": "0.5.2",
+  "versie": "0.5.3",
   "commit": "",
-  "boodschap": "Installatie wijkt uit als een nummer toch bezet blijkt",
+  "boodschap": "Poort 80 werkt nu ook zonder root",
   "datum": "2026-11-09"
 }

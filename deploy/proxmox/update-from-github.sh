@@ -131,6 +131,19 @@ if ! pct exec "$CTID" -- grep -q "UPDATE_SCRIPT" /etc/systemd/system/bakken.serv
   echo "   bijwerken vanuit de app is aangezet in de dienst"
 fi
 
+# Recht om op een lage poort te luisteren alsnog aanzetten (voor installaties van vóór deze
+# versie). Zonder dit stopt node met "listen EACCES: permission denied 0.0.0.0:80".
+if [ "${POORT:-80}" -lt 1024 ] && ! pct exec "$CTID" -- grep -q "AmbientCapabilities" /etc/systemd/system/bakken.service 2>/dev/null; then
+  pct exec "$CTID" -- sed -i "/^Group=/a CapabilityBoundingSet=CAP_NET_BIND_SERVICE" /etc/systemd/system/bakken.service || true
+  pct exec "$CTID" -- sed -i "/^Group=/a AmbientCapabilities=CAP_NET_BIND_SERVICE" /etc/systemd/system/bakken.service || true
+  if pct exec "$CTID" -- grep -q "AmbientCapabilities" /etc/systemd/system/bakken.service; then
+    pct exec "$CTID" -- systemctl daemon-reload
+    echo "   recht om op poort $POORT te luisteren is aangezet in de dienst"
+  else
+    echo "Let op: kon het recht om op poort $POORT te luisteren niet aanzetten." >&2
+  fi
+fi
+
 echo "== Dienst herstarten"
 binnen_bash "systemctl restart bakken"
 
