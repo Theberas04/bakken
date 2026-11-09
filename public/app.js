@@ -73,6 +73,12 @@
     codes: [],
     bak: null,
     filter: '',
+    overzicht: null,
+    zoek: null,
+    kast: '',
+    categorie: '',
+    donker: false,
+    fotoIndex: 0,
     offline: false,
     ingesteld: false,
     recht: function (naam) {
@@ -99,12 +105,50 @@
     return bewaard && bewaard.gebruiker ? bewaard.gebruiker : null;
   }
 
+  // -------------------------------------------------------- donkere stand ---
+  // De keuze van de gebruiker gaat voor; zonder keuze volgt de app het toestel.
+  function zetDonker(aan) {
+    staat.donker = Boolean(aan);
+    try {
+      document.documentElement.setAttribute('data-donker', staat.donker ? '1' : '0');
+      localStorage.setItem('bakken.donker.v1', staat.donker ? '1' : '0');
+    } catch (e) { /* geen opslag: dan alleen deze keer */ }
+  }
+
+  function leesDonker() {
+    var bewaard = null;
+    try { bewaard = localStorage.getItem('bakken.donker.v1'); } catch (e) { bewaard = null; }
+    if (bewaard === '1' || bewaard === '0') {
+      zetDonker(bewaard === '1');
+      return;
+    }
+    try {
+      staat.donker = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } catch (e) { staat.donker = false; }
+  }
+
   function bewaarBakken(bakken) {
     staat.bakken = bakken;
     var c = lees(SLEUTEL_CACHE, {});
     c.bakken = bakken;
     c.bijgewerkt = new Date().toISOString();
     schrijf(SLEUTEL_CACHE, c);
+  }
+
+  async function laadOverzicht() {
+    try {
+      staat.overzicht = await api('/api/overzicht');
+      var c = lees(SLEUTEL_CACHE, {});
+      c.overzicht = staat.overzicht;
+      schrijf(SLEUTEL_CACHE, c);
+    } catch (e) {
+      var bewaard = lees(SLEUTEL_CACHE, {});
+      staat.overzicht = bewaard.overzicht || null;
+    }
+    // De totalen en de filterknoppen komen uit dit antwoord. Zonder deze regel
+    // rendert het scherm ze nooit: het antwoord komt namelijk ná de eerste tekening.
+    if (staat.gebruiker && huidig().naam === 'bakken' && !staat.filter) schermBakken();
+    return staat.overzicht;
   }
 
   function bewaarCodes(codes) {
@@ -197,9 +241,15 @@
   }
 
   function tekenOffline() {
-    if (!staat.offline) return '';
-    return '<p class="offline">Geen verbinding met de server. Je ziet de gegevens die op dit toestel staan' +
-      (wachtrijLengte() ? '; ' + wachtrijLengte() + ' wijziging(en) wachten op verzenden' : '') + '.</p>';
+    var n = wachtrijLengte();
+    if (!staat.offline && !n) return '';
+    var stuk = staat.offline
+      ? 'Geen verbinding met de server. Je ziet de gegevens die op dit toestel staan.'
+      : 'Je bent weer online.';
+    return '<p class="offline">' + esc(stuk) +
+      (n ? ' ' + n + ' ' + meervoud(n, 'wijziging wacht', 'wijzigingen wachten') + ' nog op verzenden.' : '') +
+      (n ? ' <button class="klein" type="button" data-wachtrij="1">Nu versturen</button>' : '') +
+      '</p>';
   }
 
   // ------------------------------------------------------------ inloggen ---
@@ -312,75 +362,277 @@
     }
   }
 
+  // Waar een bak staat, kort op één regel: kast en plank als ze er zijn.
+  function bakLocatie(b) {
+    var delen = [b.kast, b.plank].filter(Boolean);
+    if (delen.length) return delen.join(' · ');
+    return b.locatie || 'geen locatie';
+  }
+
+  function bakKnop(b) {
+    var aantal = b.producten || 0;
+    var stuks = b.stuks || 0;
+    return '<button class="rij-knop" data-bak="' + b.id + '">' +
+      '<span class="groot"><strong>' + esc(b.naam) + '</strong>' +
+      '<small>' + esc(bakLocatie(b)) + (b.categorie ? ' · ' + esc(b.categorie) : '') + '</small></span>' +
+      '<span class="telling">' + aantal + ' ' + meervoud(aantal, 'product', 'producten') + '<br>' +
+      stuks + ' ' + meervoud(stuks, 'stuk', 'stuks') + '</span>' +
+      '</button>';
+  }
+
+  function filterRij(soort, waarden, actief) {
+    if (!waarden.length) return '';
+    return '<div class="filter-regel"><span class="klein">' + esc(soort) + '</span></div>' +
+      '<div class="filters">' + waarden.map(function (w) {
+        return '<button class="chip" type="button" data-filter="' + esc(soort) + '" data-waarde="' + esc(w) + '"' +
+          (actief === w ? ' aria-pressed="true"' : ' aria-pressed="false"') + '>' + esc(w) + '</button>';
+      }).join('') + '</div>';
+  }
+
+  // De uitkomsten van het zoeken: eerst de bakken, dan de producten erin — met
+  // de bak erbij, want dat is juist het antwoord op "waar ligt het?".
+  function zoekUitkomsten(uit) {
+    var bakken = uit.bakken || [];
+    var producten = uit.producten || [];
+    if (!bakken.length && !producten.length) {
+      return '<p class="leeg">Niets gevonden voor "' + esc(uit.term) + '".</p>' +
+        '<p class="klein">Zoeken kijkt in de naam van de bak, de kast, de plank, de categorie' +
+        ' en in elk product.</p>';
+    }
+    var html = (uit.vanToestel ? '<p class="klein">Gezocht in wat er op dit toestel staat' +
+      ' (geen verbinding).</p>' : '');
+    if (bakken.length) {
+      html += '<div class="groepskop"><h2>Bakken</h2><span>' + bakken.length + '</span></div>' +
+        bakken.map(bakKnop).join('');
+    }
+    if (producten.length) {
+      html += '<div class="groepskop"><h2>Producten</h2><span>' + producten.length + '</span></div>' +
+        producten.map(function (p) {
+          var aantal = p.product.aantal + (p.product.eenheid ? ' ' + p.product.eenheid : '');
+          return '<button class="uitkomst" data-bak="' + p.bak.id + '">' +
+            '<span class="groot"><strong>' + esc(p.product.naam) + '</strong>' +
+            '<small>' + esc(aantal) + '</small></span>' +
+            '<span class="waar">' + esc(p.bak.naam) + (p.bak.kast ? '<br>' + esc(p.bak.kast) : '') + '</span>' +
+            '</button>';
+        }).join('');
+    }
+    return html;
+  }
+
+  // Zonder verbinding zoeken we in wat er al op het toestel staat.
+  function lokaalZoeken(term) {
+    var q = String(term || '').toLowerCase();
+    var c = lees(SLEUTEL_CACHE, {});
+    var hooiVan = function (b) {
+      return [b.naam, b.locatie, b.kast, b.plank, b.categorie, b.omschrijving].filter(Boolean).join(' ').toLowerCase();
+    };
+    var bakken = (c.bakken || []).filter(function (b) { return hooiVan(b).indexOf(q) !== -1; });
+    var producten = [];
+    var detail = c.bakkenDetail || {};
+    Object.keys(detail).forEach(function (id) {
+      var d = detail[id];
+      if (!d || !d.bak) return;
+      (d.producten || []).forEach(function (p) {
+        var hooi = [p.naam, p.notitie, p.eenheid].filter(Boolean).join(' ').toLowerCase();
+        if (hooi.indexOf(q) === -1) return;
+        producten.push({
+          product: p,
+          bak: { id: d.bak.id, naam: d.bak.naam, kast: d.bak.kast || '', plank: d.bak.plank || '', categorie: d.bak.categorie || '' }
+        });
+      });
+    });
+    return { term: term, bakken: bakken, producten: producten, vanToestel: true };
+  }
+
+  var zoekTeller = null;
+
+  function zoekNu(term) {
+    var schoon = String(term || '').trim();
+    staat.filter = term;
+    if (!schoon) { staat.zoek = null; schermBakken(); return; }
+    if (staat.offline) { staat.zoek = lokaalZoeken(schoon); schermBakken(); return; }
+    api('/api/zoeken?q=' + encodeURIComponent(schoon)).then(function (uit) {
+      staat.zoek = uit;
+      schermBakken();
+    }).catch(function () {
+      staat.offline = true;
+      staat.zoek = lokaalZoeken(schoon);
+      schermBakken();
+    });
+  }
+
   function schermBakken() {
-    tekenKop('Bakken', staat.gebruiker ? staat.gebruiker.naam : '');
+    var t = (staat.overzicht && staat.overzicht.totalen) || null;
+    var ondertitel = staat.gebruiker ? staat.gebruiker.naam : '';
+    tekenKop('Bakken', ondertitel);
     tekenBalk('bakken');
     zweef.hidden = !staat.recht('bakken_wijzigen');
     zweef.innerHTML = staat.recht('bakken_wijzigen')
       ? '<button type="button" data-nieuw="bak" aria-label="Nieuwe bak">+</button>' : '';
 
     var zichtbaar = staat.bakken.filter(function (b) {
+      if (staat.kast && (b.kast || '') !== staat.kast) return false;
+      if (staat.categorie && (b.categorie || '') !== staat.categorie) return false;
       if (!staat.filter) return true;
-      var hooi = (b.naam + ' ' + (b.locatie || '') + ' ' + (b.omschrijving || '')).toLowerCase();
+      var hooi = [b.naam, b.locatie, b.kast, b.plank, b.categorie, b.omschrijving]
+        .filter(Boolean).join(' ').toLowerCase();
       return hooi.indexOf(staat.filter.toLowerCase()) !== -1;
     });
 
+    var inhoud;
+    if (staat.filter && staat.zoek) {
+      inhoud = zoekUitkomsten(staat.zoek);
+    } else if (!zichtbaar.length) {
+      inhoud = '<p class="leeg">' + (staat.bakken.length
+        ? 'Geen bak die hieraan voldoet.' : 'Nog geen bakken. Maak er een met de knop rechtsonder.') + '</p>';
+    } else if (staat.kast || staat.categorie) {
+      inhoud = zichtbaar.map(bakKnop).join('');
+    } else {
+      // Zonder filter laten we de kasten zien waar de bakken staan.
+      var groepen = {};
+      zichtbaar.forEach(function (b) {
+        var sleutel = (b.kast || '').trim() || 'Zonder kast';
+        if (!groepen[sleutel]) groepen[sleutel] = [];
+        groepen[sleutel].push(b);
+      });
+      var namen = Object.keys(groepen).sort(function (a, b) {
+        if (a === 'Zonder kast') return 1;
+        if (b === 'Zonder kast') return -1;
+        return a.localeCompare(b, 'nl');
+      });
+      inhoud = namen.map(function (naam) {
+        var stuks = groepen[naam].reduce(function (som, b) { return som + Number(b.stuks || 0); }, 0);
+        return '<div class="groepskop"><h2>' + esc(naam) + '</h2><span>' +
+          groepen[naam].length + ' ' + meervoud(groepen[naam].length, 'bak', 'bakken') + ' · ' +
+          stuks + ' ' + meervoud(stuks, 'stuk', 'stuks') + '</span></div>' +
+          groepen[naam].map(bakKnop).join('');
+      }).join('');
+    }
+
+    var totaalrij = '';
+    if (t) {
+      totaalrij = '<div class="totaalrij">' +
+        '<span><b>' + t.bakken + '</b> ' + meervoud(t.bakken, 'bak', 'bakken') + '</span>' +
+        '<span><b>' + t.producten + '</b> ' + meervoud(t.producten, 'product', 'producten') + '</span>' +
+        '<span><b>' + t.stuks + '</b> stuks</span>' +
+        (t.geplakt ? '<span><b>' + t.geplakt + '</b> stickers op een bak</span>' : '') +
+        (t.fotos ? '<span><b>' + t.fotos + '</b> ' + meervoud(t.fotos, 'foto', "foto's") + '</span>' : '') +
+        '</div>';
+    }
+
+    var actieveFilters = '';
+    if (staat.kast || staat.categorie) {
+      actieveFilters = '<div class="filter-regel"><button class="chip" type="button" data-filter="alles" data-waarde="">' +
+        'Filter wissen <span class="weg-teken">×</span></button><span class="klein">' +
+        [staat.kast, staat.categorie].filter(Boolean).map(esc).join(' · ') + '</span></div>';
+    }
+
     app.innerHTML = tekenOffline() +
-      '<input class="zoek" id="zoek" type="search" placeholder="Zoek op naam of locatie" value="' + esc(staat.filter) + '">' +
-      (zichtbaar.length ? zichtbaar.map(function (b) {
-        var aantal = b.producten || 0;
-        var stuks = b.stuks || 0;
-        return '<button class="rij-knop" data-bak="' + b.id + '">' +
-          '<span class="groot"><strong>' + esc(b.naam) + '</strong>' +
-          '<small>' + esc(b.locatie || 'geen locatie') + '</small></span>' +
-          '<span class="telling">' + aantal + ' ' + meervoud(aantal, 'product', 'producten') + '<br>' +
-          stuks + ' ' + meervoud(stuks, 'stuk', 'stuks') + '</span>' +
-          '</button>';
-      }).join('') : '<p class="leeg">Nog geen bakken. Maak er een met de knop rechtsonder.</p>') +
-      '<p class="klein" style="margin-top:14px">' +
-      (staat.bakken.length ? staat.bakken.length + ' bakken op dit toestel' : '') + '</p>';
+      '<input class="zoek" id="zoek" type="search" placeholder="Zoek in alles: naam, kast, product" value="' + esc(staat.filter) + '">' +
+      totaalrij +
+      actieveFilters +
+      (staat.overzicht
+        ? filterRij('kast', staat.overzicht.kasten || [], staat.kast) +
+          filterRij('categorie', staat.overzicht.categorieen || [], staat.categorie)
+        : '') +
+      inhoud;
 
     var zoek = $('#zoek');
     zoek.addEventListener('input', function () {
-      staat.filter = zoek.value;
       var hier = document.activeElement === zoek;
-      schermBakken();
-      if (hier) { var opnieuw = $('#zoek'); opnieuw.focus(); opnieuw.setSelectionRange(zoek.value.length, zoek.value.length); }
+      var waarde = zoek.value;
+      clearTimeout(zoekTeller);
+      zoekTeller = setTimeout(function () { zoekNu(waarde); }, 250);
+      if (hier) {
+        setTimeout(function () {
+          var opnieuw = $('#zoek');
+          if (opnieuw) { opnieuw.focus(); opnieuw.setSelectionRange(waarde.length, waarde.length); }
+        }, 0);
+      }
     });
+    zoek.addEventListener('search', function () { zoekNu(zoek.value); });
   }
 
-  function schermNieuweBak() {
-    tekenKop('Nieuwe bak', 'naam en locatie', true);
+  // Kieslijsten uit wat er al is: zo typ je "Garage" de tweede keer in één tik
+  // en ontstaan er geen drie varianten van dezelfde kast.
+  function kieslijst(id, waarden) {
+    if (!waarden || !waarden.length) return '';
+    return '<datalist id="' + id + '">' + waarden.map(function (w) {
+      return '<option value="' + esc(w) + '"></option>';
+    }).join('') + '</datalist>';
+  }
+
+  // Hetzelfde formulier voor een nieuwe bak en voor het wijzigen van een bak.
+  function bakFormulier(bak) {
+    var b = bak || {};
+    var o = staat.overzicht || { kasten: [], categorieen: [] };
+    var titel = bak ? 'Bak wijzigen' : 'Nieuwe bak';
+    tekenKop(titel, bak ? b.naam : 'naam, kast en categorie', true);
     tekenBalk('bakken');
     zweef.hidden = true;
     app.innerHTML =
       '<div class="kaart">' +
-      '  <h2>Nieuwe bak</h2>' +
+      '  <h2>' + esc(titel) + '</h2>' +
       '  <label for="naam">Naam</label>' +
-      '  <input id="naam" placeholder="Bijvoorbeeld: Garage - kerstspullen">' +
-      '  <label for="locatie">Locatie</label>' +
-      '  <input id="locatie" placeholder="Bijvoorbeeld: garage, stelling 2">' +
+      '  <input id="naam" placeholder="Bijvoorbeeld: Kerstspullen" value="' + esc(b.naam || '') + '">' +
+      '  <div class="veld-rij">' +
+      '    <div><label for="kast">Kast</label>' +
+      '      <input id="kast" list="lijst-kast" placeholder="Garage" value="' + esc(b.kast || '') + '"></div>' +
+      '    <div><label for="plank">Plank</label>' +
+      '      <input id="plank" placeholder="2" value="' + esc(b.plank || '') + '"></div>' +
+      '  </div>' +
+      '  <label for="categorie">Categorie</label>' +
+      '  <input id="categorie" list="lijst-categorie" placeholder="Kerst" value="' + esc(b.categorie || '') + '">' +
+      '  <label for="locatie">Locatie (vrije tekst, mag leeg blijven)</label>' +
+      '  <input id="locatie" placeholder="Bijvoorbeeld: achterin, bovenste stelling" value="' + esc(b.locatie || '') + '">' +
       '  <label for="omschrijving">Omschrijving (mag leeg blijven)</label>' +
-      '  <textarea id="omschrijving"></textarea>' +
+      '  <textarea id="omschrijving">' + esc(b.omschrijving || '') + '</textarea>' +
       '  <div class="knoppen">' +
-      '    <button class="hoofd" id="bewaar">Bak bewaren</button>' +
-      '    <button type="button" data-ga="bakken">Annuleren</button>' +
+      '    <button class="hoofd" id="bewaar">' + (bak ? 'Wijzigingen bewaren' : 'Bak bewaren') + '</button>' +
+      '    <button type="button" data-ga="' + (bak ? 'bak/' + b.id : 'bakken') + '">Annuleren</button>' +
       '  </div>' +
       '  <div id="vorm-melding"></div>' +
-      '</div>';
+      '</div>' +
+      kieslijst('lijst-kast', o.kasten) +
+      kieslijst('lijst-categorie', o.categorieen);
+
     $('#bewaar').addEventListener('click', async function () {
       var lichaam = {
         naam: $('#naam').value.trim(),
+        kast: $('#kast').value.trim(),
+        plank: $('#plank').value.trim(),
+        categorie: $('#categorie').value.trim(),
         locatie: $('#locatie').value.trim(),
         omschrijving: $('#omschrijving').value.trim()
       };
       if (!lichaam.naam) return toonVorm('Geef de bak een naam.');
       try {
-        var uit = await api('/api/bakken', { methode: 'POST', lichaam: lichaam });
+        var uit = bak
+          ? await api('/api/bakken/' + b.id, { methode: 'PATCH', lichaam: lichaam })
+          : await api('/api/bakken', { methode: 'POST', lichaam: lichaam });
         await laadBakken();
+        await laadOverzicht();
         ga('bak/' + uit.bak.id);
-      } catch (e) { toonVorm(e.message); }
+      } catch (e) {
+        if (!e.status && bak) {
+          zetInWachtrij({ pad: '/api/bakken/' + b.id, methode: 'PATCH', lichaam: lichaam });
+          toonVorm('Geen verbinding: de wijziging gaat naar de wachtrij en wordt later verstuurd.', 'let-op');
+          return;
+        }
+        toonVorm(e.message);
+      }
     });
+  }
+
+  function schermNieuweBak() {
+    bakFormulier(null);
+  }
+
+  function schermBakWijzigen(id) {
+    var bak = (staat.bak && staat.bak.bak && String(staat.bak.bak.id) === String(id)) ? staat.bak.bak
+      : staat.bakken.filter(function (b) { return String(b.id) === String(id); })[0];
+    if (!bak) return ga('bak/' + id);
+    bakFormulier(bak);
   }
 
   function toonVorm(tekst, soort) {
@@ -414,15 +666,20 @@
     var fotos = gegevens.fotos || [];
     var stuks = producten.reduce(function (som, p) { return som + Number(p.aantal || 0); }, 0);
 
-    tekenKop(bak.naam, (bak.locatie || 'geen locatie') + ' · ' + producten.length + ' ' +
-      meervoud(producten.length, 'product', 'producten') + ' · ' + stuks + ' ' + meervoud(stuks, 'stuk', 'stuks'), true);
+    tekenKop(bak.naam, bakLocatie(bak) + (bak.categorie ? ' · ' + bak.categorie : '') + ' · ' +
+      producten.length + ' ' + meervoud(producten.length, 'product', 'producten') + ' · ' +
+      stuks + ' ' + meervoud(stuks, 'stuk', 'stuks'), true);
     tekenBalk('bakken');
 
     var sticker = '';
     if (bak.code) {
       sticker = '<div class="sticker">' + qrSvg(bak.code) + '<div>' +
         '<div class="code-tekst">' + esc(bak.code) + '</div>' +
-        '<p class="klein">' + esc(bak.codeNaam || 'zonder naam') + '</p></div></div>';
+        '<p class="klein">' + esc(bak.codeNaam || 'zonder naam') + '</p>' +
+        (staat.recht('codes_beheren')
+          ? '<div class="knoppen"><button class="klein" type="button" data-print-code="' + esc(bak.code) + '">Opnieuw printen</button></div>'
+          : '') +
+        '</div></div>';
     }
 
     app.innerHTML = tekenOffline() +
@@ -456,11 +713,13 @@
 
       '<div class="kaart">' +
       '<h2>Foto\'s van de inhoud</h2>' +
-      (fotos.length ? '<div class="fotos">' + fotos.map(function (f) {
-        return '<figure><img src="/api/fotos/' + f.id + '" alt="Foto van de inhoud" loading="lazy">' +
+      (fotos.length ? '<div class="fotos">' + fotos.map(function (f, i) {
+        return '<figure><img src="/api/fotos/' + f.id + '" alt="Foto van de inhoud" loading="lazy"' +
+          ' data-foto="' + i + '" style="cursor:zoom-in">' +
           (staat.recht('bakken_verwijderen')
             ? '<button class="weg" type="button" data-foto-weg="' + f.id + '" aria-label="Foto verwijderen">×</button>' : '') +
-          '<figcaption>' + esc(datum(f.gemaaktOp)) + (f.opServer ? '' : ' · nog niet op de server') + '</figcaption></figure>';
+          '<figcaption>' + esc(datum(f.gemaaktOp)) + (f.omschrijving ? ' · ' + esc(f.omschrijving) : '') +
+          (f.opServer ? '' : ' · nog niet op de server') + '</figcaption></figure>';
       }).join('') + '</div>' : '<p class="leeg">Nog geen foto\'s van deze bak.</p>') +
       (staat.recht('bakken_wijzigen')
         ? '<div class="knoppen">' +
@@ -650,7 +909,8 @@
       '<p>' + staat.codes.length + ' codes · ' + geplakt + ' op een bak · ' + vrij + ' nog vrij.</p>' +
       '<div class="knoppen">' +
       '<button class="hoofd" type="button" data-nieuwe-codes="1">Nieuwe codes maken</button>' +
-      (staat.codes.length ? '<button type="button" data-print="1">Printvel maken</button>' : '') +
+      (staat.codes.length ? '<button type="button" data-print="1">Printvel maken</button>' +
+        '<a class="knop" href="#/print?formaat=groot">Groot vel (24)</a>' : '') +
       '</div>' +
       '<div id="codes-melding"></div>' +
       '</div>' +
@@ -663,12 +923,40 @@
           (c.bakId ? ' · in bak ' + esc(bakNaam(c.bakId)) : ' · nog niet geplakt') +
           (c.printOp ? ' · gedrukt ' + esc(datum(c.printOp)) : '') + '</p>' +
           '<div class="knoppen">' +
+          '<button class="klein" type="button" data-print-code="' + esc(c.code) + '">Opnieuw printen</button>' +
           '<button class="klein" type="button" data-hernoem="' + esc(c.code) + '">Naam wijzigen</button>' +
           (c.bakId ? '<button class="klein" type="button" data-open-bak="' + c.bakId + '">Naar de bak</button>'
             : '<button class="klein" type="button" data-koppel="' + esc(c.code) + '">Aan een bak koppelen</button>') +
           '<button class="klein weg" type="button" data-code-weg="' + esc(c.code) + '">Verwijderen</button>' +
           '</div></div></div></div>';
       }).join('') : '<p class="leeg">Nog geen codes. Maak er een vel van 48 in één keer.</p>');
+  }
+
+  // ---------------------------------------------------------------- foto's ---
+  // Eén foto groot, met de pijltjes erbij: op een telefoon is een raster van
+  // 120 pixels te klein om te zien wat er in de bak zit.
+  function toonFoto(index) {
+    var fotos = (staat.bak && staat.bak.fotos) || [];
+    if (!fotos.length) return;
+    staat.fotoIndex = Math.max(0, Math.min(fotos.length - 1, Number(index) || 0));
+    var f = fotos[staat.fotoIndex];
+    var oud = $('.fotogroot');
+    if (oud) oud.remove();
+    var vak = document.createElement('div');
+    vak.className = 'fotogroot';
+    vak.innerHTML = '<img src="/api/fotos/' + f.id + '" alt="Foto van de inhoud">' +
+      '<div class="balk-onder">' +
+      '<button type="button" data-foto-terug="1"' + (staat.fotoIndex === 0 ? ' disabled' : '') + '>← vorige</button>' +
+      '<span>' + (staat.fotoIndex + 1) + ' / ' + fotos.length + '</span>' +
+      '<button type="button" data-foto-verder="1"' + (staat.fotoIndex >= fotos.length - 1 ? ' disabled' : '') + '>volgende →</button>' +
+      '<button type="button" data-foto-sluit="1">Sluiten</button>' +
+      '</div>';
+    document.body.appendChild(vak);
+  }
+
+  function sluitFoto() {
+    var vak = $('.fotogroot');
+    if (vak) vak.remove();
   }
 
   function bakNaam(id) {
@@ -708,36 +996,51 @@
   }
 
   // -------------------------------------------------------------- printen ---
-  async function schermPrint(welke) {
+  async function schermPrint(vraag) {
     var codes = staat.codes;
     if (!codes.length) {
       try { codes = await laadCodes(); } catch (e) { codes = []; }
     }
-    var gevraagd = String(welke || '').split(',').filter(Boolean);
+    var gevraagd = String(vraag && vraag.get ? (vraag.get('codes') || '') : (vraag || ''))
+      .split(',').filter(Boolean);
+    var formaat = (vraag && vraag.get ? (vraag.get('formaat') || '') : '') === 'groot' ? 'groot' : 'klein';
     var teTonen = gevraagd.length
       ? codes.filter(function (c) { return gevraagd.indexOf(c.code) !== -1; })
       : codes.filter(function (c) { return !c.bakId; });
 
-    tekenKop('Printvel', teTonen.length + ' stickers', true);
+    tekenKop('Printvel', teTonen.length + ' stickers · ' +
+      (formaat === 'groot' ? 'groot vel' : 'klein vel'), true);
     balk.hidden = true;
     zweef.hidden = true;
 
+    var codeParam = gevraagd.length ? '?codes=' + encodeURIComponent(gevraagd.join(',')) : '';
+    var koppel = function (soort) {
+      return '#/print' + codeParam + (codeParam ? '&' : '?') + 'formaat=' + soort;
+    };
+
     app.innerHTML = teTonen.length
       ? '<div class="niet-printen kaart">' +
-        '<p>Dit vel is ' + teTonen.length + ' stickers. Kies "Afdrukken" en laat de printer op\n' +
+        '<p>Dit vel is ' + teTonen.length + ' stickers (' +
+        (formaat === 'groot' ? 'groot: 24 per A4, met de naam van de bak er groot op'
+          : 'klein: 48 per A4') + '). Kies "Afdrukken" en laat de printer op\n' +
         '   "achtergrondafbeeldingen" staan; dan blijven de codes scherp.</p>' +
         '<div class="knoppen">' +
         '<button class="hoofd" type="button" id="doe-print">Afdrukken</button>' +
+        '<a class="knop" href="' + koppel(formaat === 'groot' ? 'klein' : 'groot') + '">' +
+        (formaat === 'groot' ? 'Klein vel (48)' : 'Groot vel (24)') + '</a>' +
         '<button type="button" data-ga="codes">Terug</button>' +
         '</div></div>' +
-        '<div class="printvel">' + teTonen.map(function (c) {
+        '<div class="printvel' + (formaat === 'groot' ? ' groot' : '') + '">' + teTonen.map(function (c) {
           var adres = location.origin + '/b/' + encodeURIComponent(c.code);
           var svg = window.bakkenQr.maakPrintSvg(adres);
+          var onder = formaat === 'groot'
+            ? esc(c.bakNaam || c.naam || 'Bakken')
+            : esc(c.naam || 'Bakken');
           return '<div class="sticker-vak">' + svg +
-            '<div class="naam">' + esc(c.naam || 'Bakken') + '</div>' +
+            '<div class="naam">' + onder + '</div>' +
             '<div class="code">' + esc(c.code) + '</div></div>';
         }).join('') + '</div>'
-      : '<p class="leeg">Er zijn geen vrije codes om te printen. Maak eerst nieuwe codes.</p>';
+      : '<p class="leeg">Er zijn geen codes om te printen. Maak eerst nieuwe codes.</p>';
 
     var knop = $('#doe-print');
     if (knop) knop.addEventListener('click', function () { window.print(); });
@@ -766,6 +1069,12 @@
     var instellingen = null;
     if (staat.recht('bijwerken')) {
       try { instellingen = await api('/api/instellingen'); } catch (e) { instellingen = null; }
+    }
+
+    // Het logboek is van de beheerder; een gewone gebruiker krijgt hier niets.
+    var logRegels = null;
+    if (staat.gebruiker && staat.gebruiker.rol === 'beheerder') {
+      try { logRegels = (await api('/api/logboek?n=12')).regels || []; } catch (e) { logRegels = null; }
     }
 
     app.innerHTML = tekenOffline() +
@@ -800,6 +1109,22 @@
         '<div class="knoppen"><button type="button" id="bewaar-basis">Bewaren</button></div>' +
         '<div id="basis-melding"></div>' +
         '</div>' : '') +
+
+      (logRegels ? '<div class="kaart">' +
+        '<h2>Logboek</h2>' +
+        '<p>Wie deed wat. Alleen de beheerder ziet dit.</p>' +
+        (logRegels.length ? logRegels.map(logRegel).join('') : '<p class="leeg">Nog niets gebeurd.</p>') +
+        '<div class="knoppen"><button type="button" data-ga="logboek">Alles bekijken</button></div>' +
+        '</div>' : '') +
+
+      '<div class="kaart">' +
+      '<h2>Weergave</h2>' +
+      '<p>De app volgt de stand van je toestel, tenzij je hier iets kiest.</p>' +
+      '<div class="knoppen">' +
+      '<button type="button" id="donker" aria-pressed="' + (staat.donker ? 'true' : 'false') + '">' +
+      (staat.donker ? 'Donker aan' : 'Donker uit') + '</button>' +
+      '</div>' +
+      '</div>' +
 
       '<div class="kaart">' +
       '<h2>Uitloggen</h2>' +
@@ -870,12 +1195,53 @@
       } catch (e) { toonMelding('#basis-melding', e.message, 'fout'); }
     });
 
+    var donkerKnop = $('#donker');
+    if (donkerKnop) donkerKnop.addEventListener('click', function () {
+      zetDonker(!staat.donker);
+      schermBeheer();
+    });
+
     $('#uitloggen').addEventListener('click', async function () {
       try { await api('/api/uitloggen', { methode: 'POST' }); } catch (e) { /* toch doorgaan */ }
       staat.gebruiker = null;
       bewaarGebruiker(null);
       schermInloggen();
     });
+  }
+
+  // -------------------------------------------------------------- logboek ---
+  // Alleen de beheerder komt hier; de server weigert het voor iemand anders.
+  function logRegel(r) {
+    return '<div class="logregel">' +
+      '<span class="wanneer">' + esc(datum(r.wanneer)) + '</span>' +
+      '<span class="wat"><strong>' + esc(r.actie) + '</strong>' +
+      (r.onderwerp ? ' · ' + esc(r.onderwerp) : '') +
+      (r.details ? '<br><small>' + esc(r.details) + '</small>' : '') + '</span>' +
+      '<span class="wie">' + esc(r.gebruiker) + '</span>' +
+      '</div>';
+  }
+
+  async function schermLogboek() {
+    tekenKop('Logboek', 'wie deed wat', true);
+    tekenBalk('beheer');
+    zweef.hidden = true;
+    app.innerHTML = '<p class="laden">Logboek wordt geladen…</p>';
+    var regels = [];
+    var fout = '';
+    try {
+      var uit = await api('/api/logboek?n=200');
+      regels = uit.regels || [];
+    } catch (e) {
+      fout = e.message;
+    }
+    app.innerHTML =
+      '<div class="kaart">' +
+      '<h2>Logboek</h2>' +
+      (fout ? '<div class="melding fout">' + esc(fout) + '</div>'
+        : (regels.length ? regels.map(logRegel).join('')
+          : '<p class="leeg">Nog niets gebeurd.</p>')) +
+      '<p class="klein" style="margin-top:10px">De laatste 2000 regels blijven bewaard.</p>' +
+      '</div>';
   }
 
   function toonMelding(doel, tekst, soort) {
@@ -902,13 +1268,17 @@
     var route = huidig();
     var delen = route.naam.split('/');
     try {
+      // Let op de volgorde: 'bak/nieuw' en 'bak/<id>/wijzig' horen vóór de gewone
+      // bak-route, anders leest de app 'nieuw' als het nummer van een bak.
+      if (route.naam === 'bak/nieuw') return schermNieuweBak();
+      if (delen[0] === 'bak' && delen[1] && delen[2] === 'wijzig') return schermBakWijzigen(delen[1]);
       if (delen[0] === 'bak' && delen[1]) return await schermBak(delen[1]);
       if (route.naam === 'scan') return schermScannen(route.vraag.get('code') || '');
       if (route.naam === 'codes') return await schermCodes();
       if (route.naam === 'codes/nieuw') return schermNieuweCodes();
-      if (route.naam === 'print') return await schermPrint(route.vraag.get('codes') || '');
+      if (route.naam === 'print') return await schermPrint(route.vraag);
       if (route.naam === 'beheer') return await schermBeheer();
-      if (route.naam === 'bak/nieuw') return schermNieuweBak();
+      if (route.naam === 'logboek') return await schermLogboek();
       return schermBakken();
     } catch (e) {
       app.innerHTML = '<div class="melding fout">' + esc(e.message) + '</div>';
@@ -917,16 +1287,38 @@
 
   // Klikken en tikken op één plek afhandelen: minder losse listeners.
   document.addEventListener('click', async function (e) {
-    var knop = e.target.closest('[data-ga],[data-bak],[data-nieuw],[data-tel],[data-sticker],[data-verwijder],[data-wijzig],[data-hernoem],[data-code-weg],[data-koppel],[data-open-bak],[data-nieuwe-codes],[data-print],[data-product-nieuw],[data-gebruiker-nieuw],[data-gebruiker-wijzig],[data-foto-weg]');
+    var knop = e.target.closest('[data-ga],[data-bak],[data-nieuw],[data-tel],[data-sticker],' +
+      '[data-verwijder],[data-wijzig],[data-hernoem],[data-code-weg],[data-koppel],[data-open-bak],' +
+      '[data-nieuwe-codes],[data-print],[data-print-code],[data-product-nieuw],[data-gebruiker-nieuw],' +
+      '[data-gebruiker-wijzig],[data-foto-weg],[data-foto],[data-foto-terug],[data-foto-verder],' +
+      '[data-foto-sluit],[data-filter],[data-wachtrij]');
     if (!knop) return;
 
+    if (knop.dataset.wachtrij) {
+      knop.disabled = true;
+      var gedaan = await verwerkWachtrij().catch(function () { return 0; });
+      await laadBakken().catch(function () {});
+      await laadOverzicht().catch(function () {});
+      teken();
+      if (gedaan) meld(gedaan + ' ' + meervoud(gedaan, 'wijziging is', 'wijzigingen zijn') + ' verstuurd.', 'goed');
+      return;
+    }
+
+    if (knop.dataset.fotoSluit) return sluitFoto();
+    if (knop.dataset.fotoTerug) return toonFoto(staat.fotoIndex - 1);
+    if (knop.dataset.fotoVerder) return toonFoto(staat.fotoIndex + 1);
+    if (knop.dataset.foto !== undefined) return toonFoto(knop.dataset.foto);
+    if (knop.dataset.filter) return zetFilter(knop.dataset.filter, knop.dataset.waarde || '');
+    if (knop.dataset.printCode) {
+      return ga('print?codes=' + encodeURIComponent(knop.dataset.printCode) + '&formaat=groot');
+    }
     if (knop.dataset.ga) return ga(knop.dataset.ga);
     if (knop.dataset.bak) return ga('bak/' + knop.dataset.bak);
     if (knop.dataset.openBak) return ga('bak/' + knop.dataset.openBak);
     if (knop.dataset.nieuw) return ga('bak/nieuw');
     if (knop.dataset.nieuweCodes) return ga('codes/nieuw');
     if (knop.dataset.print) return ga('print');
-    if (knop.dataset.wijzig) return wijzigBak(knop.dataset.wijzig);
+    if (knop.dataset.wijzig) return ga('bak/' + knop.dataset.wijzig + '/wijzig');
     if (knop.dataset.sticker) return maakSticker(knop.dataset.sticker);
     if (knop.dataset.verwijder) return verwijderBak(knop.dataset.verwijder);
     if (knop.dataset.productNieuw) return voegProductToe(knop.dataset.productNieuw);
@@ -940,6 +1332,29 @@
     if (knop.dataset.tel) {
       var verschil = Number(knop.dataset.verschil);
       return telProduct(knop.dataset.tel, verschil);
+    }
+  });
+
+  // Filteren op kast of categorie: nog een keer op dezelfde chip tikken heft hem op.
+  function zetFilter(soort, waarde) {
+    if (soort === 'alles') {
+      staat.kast = '';
+      staat.categorie = '';
+    } else if (soort === 'kast') {
+      staat.kast = staat.kast === waarde ? '' : waarde;
+    } else if (soort === 'categorie') {
+      staat.categorie = staat.categorie === waarde ? '' : waarde;
+    }
+    schermBakken();
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if ($('.fotogroot')) { sluitFoto(); return; }
+    var zoekvak = $('#zoek');
+    if (zoekvak && document.activeElement === zoekvak && zoekvak.value) {
+      zoekvak.value = '';
+      zoekNu('');
     }
   });
 
@@ -1011,6 +1426,7 @@
     if (knop) knop.disabled = true;
     try {
       await api('/api/items/' + id + '/tel', { methode: 'POST', lichaam: { verschil: verschil } });
+      laadOverzicht();
       await schermBak(huidig().naam.split('/')[1]);
     } catch (e) {
       // Offline: de telling gaat de wachtrij in, de kaart laat het meteen zien.
@@ -1035,24 +1451,21 @@
         methode: 'POST',
         lichaam: { naam: naam, aantal: Number(aantalRuw) || 0, eenheid: eenheid || '' }
       });
+      await laadOverzicht();
       await schermBak(bakId);
-    } catch (e) { alert(e.message); }
-  }
-
-  async function wijzigBak(id) {
-    var huidigeBak = staat.bak && String(staat.bak.bak.id) === String(id) ? staat.bak.bak : null;
-    if (!huidigeBak) return;
-    var naam = prompt('Naam van de bak', huidigeBak.naam);
-    if (naam === null) return;
-    var locatie = prompt('Locatie', huidigeBak.locatie || '');
-    if (locatie === null) return;
-    var omschrijving = prompt('Omschrijving', huidigeBak.omschrijving || '');
-    if (omschrijving === null) return;
-    try {
-      await api('/api/bakken/' + id, { methode: 'PATCH', lichaam: { naam: naam, locatie: locatie, omschrijving: omschrijving } });
-      await laadBakken();
-      await schermBak(id);
-    } catch (e) { alert(e.message); }
+    } catch (e) {
+      // Offline: het product gaat de wachtrij in en wordt later verstuurd.
+      if (!e.status) {
+        zetInWachtrij({
+          pad: '/api/bakken/' + bakId + '/items',
+          methode: 'POST',
+          lichaam: { naam: naam, aantal: Number(aantalRuw) || 0, eenheid: eenheid || '' }
+        });
+        toonMelding('#inhoud', 'Geen verbinding: "' + naam + '" gaat naar de wachtrij en wordt later verstuurd.', 'let-op');
+        return;
+      }
+      alert(e.message);
+    }
   }
 
   async function verwijderBak(id) {
@@ -1148,6 +1561,7 @@
 
   // ---------------------------------------------------------------- start ---
   async function start() {
+    leesDonker();
     // Een sticker is een link naar /b/<CODE>; die opent meteen het scannen.
     var opPad = /^\/b\/([0-9A-Za-z]{1,12})\/?$/.exec(location.pathname);
     try {
@@ -1177,6 +1591,7 @@
     }
 
     await laadBakken().catch(function () {});
+    await laadOverzicht().catch(function () {});
     if (opPad) return ga('scan?code=' + encodeURIComponent(opPad[1]));
     teken();
   }

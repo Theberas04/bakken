@@ -4,7 +4,7 @@
 //
 // Let op: bij elke wijziging van de pagina's moet de cachenaam hieronder omhoog,
 // anders houdt de telefoon de oude versie vast.
-var CACHE = 'bakken-schil-v6';
+var CACHE = 'bakken-schil-v9';
 
 var SCHIL = [
   '/',
@@ -17,16 +17,25 @@ var SCHIL = [
   '/manifest.webmanifest'
 ];
 
+// De schil ophalen met cache: 'reload'. Zonder dat pakt de service worker bij
+// een nieuwe versie het bestand uit de HTTP-cache van de telefoon, en dan blijft
+// de oude app staan ook al is de cachenaam opgehoogd (de server stuurt
+// max-age=300 mee). Zo krijgt elke nieuwe versie echt nieuwe bestanden.
+function haalVers(pad) {
+  return fetch(new Request(pad, { cache: 'reload' }));
+}
+
 self.addEventListener('install', function (gebeurtenis) {
   self.skipWaiting();
   gebeurtenis.waitUntil(
     caches.open(CACHE).then(function (cache) {
-      return cache.addAll(SCHIL).catch(function () {
-        // Eén ontbrekend bestand mag de hele installatie niet laten mislukken.
-        return Promise.all(SCHIL.map(function (pad) {
-          return cache.add(pad).catch(function () {});
-        }));
-      });
+      return Promise.all(SCHIL.map(function (pad) {
+        return haalVers(pad).then(function (antwoord) {
+          if (antwoord && antwoord.ok) return cache.put(pad, antwoord);
+        }).catch(function () {
+          // Eén ontbrekend bestand mag de hele installatie niet laten mislukken.
+        });
+      }));
     })
   );
 });

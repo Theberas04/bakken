@@ -1,5 +1,25 @@
 # Wat er per versie veranderd is
 
+## 0.7.0 - 10 november 2026
+- **Zoeken over alles**: één zoekveld dat in de baknaam, de kast, de plank, de categorie, de
+  locatie, de omschrijving én in elk product kijkt. Je ziet in welke bak iets ligt. Zonder
+  verbinding zoekt de app in wat er op het toestel staat.
+- **Kast, plank en categorie** als echte gegevens in plaats van één tekstveld, met keuzelijsten
+  uit wat er al is. De bakkenlijst groepeert per kast en je kunt op kast en categorie filteren.
+  Bestaande databanken krijgen de nieuwe kolommen er automatisch bij; er gaat niets verloren.
+- **Sticker opnieuw printen** per code en vanaf de bakpagina.
+- **Tweede stickervel-indeling**: een groot vel (24 op A4, met de naam van de bak er groot op)
+  naast het kleine vel (48).
+- **Foto's groot bekijken**: tik op een foto voor grootbeeld, met vorige en volgende.
+- **Logboek** met wie wat deed (bakken, producten, codes, foto's, gebruikers, bijwerken). Alleen
+  de beheerder ziet het; de server weigert het voor anderen.
+- **Donkere modus** die de stand van het toestel volgt, met een eigen schakelaar in Beheer.
+- **Totalen** bovenaan: aantal bakken, producten, stuks, foto's en geplakte stickers.
+- **Beter offline**: naast tellen gaan nu ook producten toevoegen en bakken wijzigen de wachtrij
+  in, met een knop om ze alsnog te versturen.
+- De app-schil wordt door de service worker met `cache: 'reload'` opgehaald. Zonder dat hield een
+  telefoon na een nieuwe versie vijf minuten de oude app (de server stuurt `max-age=300` mee).
+
 ## 0.6.0 - 9 november 2026
 - `tunnel-bakken.sh`: zet de Cloudflare Tunnel met vaste hostnaam aan, in de container zelf.
   Het script zoekt de container, installeert `cloudflared`, zet de tunnel als dienst aan en

@@ -18,7 +18,7 @@ const rechten = require('./lib/rechten');
 const versie = require('./lib/versie');
 const codes = require('./lib/codes');
 
-const VERSIE = '0.6.0';
+const VERSIE = '0.7.0';
 const REPO = 'Theberas04/bakken';
 const VERSIE_BRON = 'https://raw.githubusercontent.com/' + REPO + '/main/VERSIE.json';
 const UPDATE_SCRIPT_STANDAARD = 'deploy/proxmox/bijwerken-in-de-app.sh';
@@ -234,6 +234,19 @@ function maakApp(opties) {
     });
   }
 
+  // Wie deed wat, voor het logboek in het beheerscherm. Een fout in het logboek mag
+  // nooit een echte wijziging laten mislukken: daarom vangen we alles af.
+  function log(gebruiker, actie, onderwerp, details) {
+    try {
+      db.schrijfLog(databank, {
+        gebruiker: gebruiker && gebruiker.naam ? gebruiker.naam : 'onbekend',
+        actie,
+        onderwerp,
+        details
+      });
+    } catch (e) { /* logboek is bijzaak */ }
+  }
+
   function versieOverzicht() {
     return {
       versie: appVersie,
@@ -424,6 +437,7 @@ function maakApp(opties) {
           commando: updateCommando()
         });
       }
+      log(gebruiker, 'bijwerken gestart', 'versie ' + appVersie, updateScript);
       const uitkomst = spawnSync('bash', [updateScript], {
         cwd: __dirname, encoding: 'utf8', timeout: 180000
       });
@@ -457,7 +471,21 @@ function maakApp(opties) {
         return stuurJson(res, 400, { fout: 'Een adres begint met http:// of https://' });
       }
       db.zetInstelling(databank, 'basis_adres', waarde);
+      log(gebruiker, 'adres van de app ingesteld', waarde || '(leeg)', '');
       return stuurJson(res, 200, { basisAdres: waarde, effectief: basisAdres(req) });
+    }
+
+    // Totalen en de lijsten om op te filteren (kasten, categorieën).
+    if (pad === '/api/overzicht' && methode === 'GET') {
+      if (!eisRecht(res, gebruiker, 'bakken_bekijken')) return;
+      return stuurJson(res, 200, db.overzicht(databank));
+    }
+
+    // Zoeken over alles: bakken én de producten erin.
+    if (pad === '/api/zoeken' && methode === 'GET') {
+      if (!eisRecht(res, gebruiker, 'bakken_bekijken')) return;
+      const vraag = new URL(req.url, 'http://localhost').searchParams.get('q') || '';
+      return stuurJson(res, 200, db.zoekAlles(databank, vraag, 60));
     }
 
     // Bakken
@@ -467,7 +495,10 @@ function maakApp(opties) {
     }
     if (pad === '/api/bakken' && methode === 'POST') {
       if (!eisRecht(res, gebruiker, 'bakken_wijzigen')) return;
-      return stuurJson(res, 201, { bak: db.voegBakToe(databank, await leesJson(req)) });
+      const nieuw = db.voegBakToe(databank, await leesJson(req));
+      log(gebruiker, 'bak toegevoegd', nieuw.naam,
+        [nieuw.kast, nieuw.plank, nieuw.categorie].filter(Boolean).join(' · '));
+      return stuurJson(res, 201, { bak: nieuw });
     }
 
     let m = /^\/api\/bakken\/(\d+)$/.exec(pad);
@@ -490,11 +521,16 @@ function maakApp(opties) {
       }
       if (methode === 'PATCH' || methode === 'PUT') {
         if (!eisRecht(res, gebruiker, 'bakken_wijzigen')) return;
-        return stuurJson(res, 200, { bak: db.wijzigBak(databank, id, await leesJson(req)) });
+        const gewijzigd = db.wijzigBak(databank, id, await leesJson(req));
+        log(gebruiker, 'bak gewijzigd', gewijzigd.naam,
+          [gewijzigd.kast, gewijzigd.plank, gewijzigd.categorie].filter(Boolean).join(' · '));
+        return stuurJson(res, 200, { bak: gewijzigd });
       }
       if (methode === 'DELETE') {
         if (!eisRecht(res, gebruiker, 'bakken_verwijderen')) return;
+        const weg = db.haalBak(databank, id);
         db.verwijderBak(databank, id);
+        log(gebruiker, 'bak verwijderd', weg ? weg.naam : String(id), '');
         return stuurJson(res, 200, { verwijderd: true });
       }
     }
@@ -508,7 +544,11 @@ function maakApp(opties) {
       }
       if (methode === 'POST') {
         if (!eisRecht(res, gebruiker, 'bakken_wijzigen')) return;
-        return stuurJson(res, 201, { product: db.voegItemToe(databank, bakId, await leesJson(req)) });
+        const nieuw = db.voegItemToe(databank, bakId, await leesJson(req));
+        const bak = db.haalBak(databank, bakId);
+        log(gebruiker, 'product toegevoegd', nieuw.naam + (bak ? ' in ' + bak.naam : ''),
+          nieuw.aantal + (nieuw.eenheid ? ' ' + nieuw.eenheid : ''));
+        return stuurJson(res, 201, { product: nieuw });
       }
     }
 
@@ -517,11 +557,15 @@ function maakApp(opties) {
       const id = Number(m[1]);
       if (methode === 'PATCH' || methode === 'PUT') {
         if (!eisRecht(res, gebruiker, 'bakken_wijzigen')) return;
-        return stuurJson(res, 200, { product: db.wijzigItem(databank, id, await leesJson(req)) });
+        const gewijzigd = db.wijzigItem(databank, id, await leesJson(req));
+        log(gebruiker, 'product gewijzigd', gewijzigd.naam, '');
+        return stuurJson(res, 200, { product: gewijzigd });
       }
       if (methode === 'DELETE') {
         if (!eisRecht(res, gebruiker, 'bakken_verwijderen')) return;
+        const weg = db.lijstItems(databank, 0).filter((i) => Number(i.id) === id)[0];
         db.verwijderItem(databank, id);
+        log(gebruiker, 'product verwijderd', weg ? weg.naam : String(id), '');
         return stuurJson(res, 200, { verwijderd: true });
       }
     }
@@ -530,7 +574,11 @@ function maakApp(opties) {
     if (m && methode === 'POST') {
       if (!eisRecht(res, gebruiker, 'bakken_wijzigen')) return;
       const lichaam = await leesJson(req);
-      return stuurJson(res, 200, { product: db.telItemBij(databank, Number(m[1]), lichaam.verschil) });
+      const geteld = db.telItemBij(databank, Number(m[1]), lichaam.verschil);
+      log(gebruiker, 'aantal aangepast', geteld.naam,
+        (Number(lichaam.verschil) > 0 ? '+' : '') + Number(lichaam.verschil) +
+        ' → ' + geteld.aantal + (geteld.eenheid ? ' ' + geteld.eenheid : ''));
+      return stuurJson(res, 200, { product: geteld });
     }
 
     // Codes
@@ -542,6 +590,8 @@ function maakApp(opties) {
       if (!eisRecht(res, gebruiker, 'codes_beheren')) return;
       const lichaam = await leesJson(req);
       const nieuw = db.maakCodes(databank, lichaam.aantal || 1, lichaam.naam || '');
+      log(gebruiker, 'codes gemaakt', (lichaam.naam || 'zonder naam') + ' (' + nieuw.length + ')',
+        nieuw.map((c) => c.code).join(' '));
       return stuurJson(res, 201, {
         codes: nieuw.map((c) => Object.assign({}, c, { inhoud: codes.qrInhoud(c.code, basisAdres(req)) }))
       });
@@ -562,11 +612,16 @@ function maakApp(opties) {
       }
       if (methode === 'PATCH' || methode === 'PUT') {
         if (!eisRecht(res, gebruiker, 'codes_beheren')) return;
-        return stuurJson(res, 200, { code: db.wijzigCode(databank, code, await leesJson(req)) });
+        const gewijzigd = db.wijzigCode(databank, code, await leesJson(req));
+        log(gebruiker, 'code gewijzigd', gewijzigd.code,
+          gewijzigd.naam + (gewijzigd.bakId ? ' · in bak ' + String(gewijzigd.bakId) : ' · los'));
+        return stuurJson(res, 200, { code: gewijzigd });
       }
       if (methode === 'DELETE') {
         if (!eisRecht(res, gebruiker, 'codes_beheren')) return;
+        const weg = db.haalCode(databank, code);
         db.verwijderCode(databank, code);
+        log(gebruiker, 'code verwijderd', code, weg ? weg.naam : '');
         return stuurJson(res, 200, { verwijderd: true });
       }
     }
@@ -584,7 +639,10 @@ function maakApp(opties) {
       if (methode === 'POST') {
         if (!eisRecht(res, gebruiker, 'bakken_wijzigen')) return;
         const lichaam = await leesJson(req, MAX_FOTO_BYTES + 1024 * 1024);
-        return stuurJson(res, 201, { foto: bewaarFoto(bakId, lichaam) });
+        const foto = bewaarFoto(bakId, lichaam);
+        const bak = db.haalBak(databank, bakId);
+        log(gebruiker, 'foto toegevoegd', bak ? bak.naam : String(bakId), 'foto ' + foto.id);
+        return stuurJson(res, 201, { foto: foto });
       }
     }
 
@@ -606,6 +664,8 @@ function maakApp(opties) {
         try {
           fs.unlinkSync(path.join(mediaDir, path.basename(weg.bestand)));
         } catch (e) { /* het bestand was er al niet meer */ }
+        const bak = db.haalBak(databank, weg.bakId);
+        log(gebruiker, 'foto verwijderd', bak ? bak.naam : String(weg.bakId), 'foto ' + fotoId);
         return stuurJson(res, 200, { verwijderd: true });
       }
     }
@@ -623,6 +683,15 @@ function maakApp(opties) {
         bak: gevonden.bak,
         producten: gevonden.bak ? db.lijstItems(databank, gevonden.bak.id) : []
       });
+    }
+
+    // Logboek: alleen voor de beheerder, niet voor iemand met losse rechten.
+    if (pad === '/api/logboek' && methode === 'GET') {
+      if (!gebruiker || gebruiker.rol !== 'beheerder') {
+        return stuurJson(res, 403, { fout: 'Het logboek is alleen voor de beheerder.' });
+      }
+      const vraag = new URL(req.url, 'http://localhost').searchParams.get('n') || '100';
+      return stuurJson(res, 200, { regels: db.lijstLog(databank, vraag) });
     }
 
     // Gebruikers (alleen met het recht gebruikers_beheren)
@@ -643,6 +712,7 @@ function maakApp(opties) {
         rechten: lichaam.rechten,
         afdruk
       });
+      log(gebruiker, 'gebruiker toegevoegd', nieuw.naam, 'rol ' + nieuw.rol);
       return stuurJson(res, 201, { gebruiker: db.zonderAfdruk(nieuw) });
     }
 
@@ -659,11 +729,14 @@ function maakApp(opties) {
             lichaam.rechten === undefined ? uit.rechten : lichaam.rechten);
         }
         if (lichaam.wachtwoord) uit = db.zetWachtwoord(databank, id, accounts.maakAfdruk(lichaam.wachtwoord));
+        log(gebruiker, 'gebruiker gewijzigd', uit.naam, 'rol ' + uit.rol);
         return stuurJson(res, 200, { gebruiker: db.zonderAfdruk(uit) });
       }
       if (methode === 'DELETE') {
         if (!eisRecht(res, gebruiker, 'gebruikers_beheren')) return;
+        const weg = db.haalGebruiker(databank, id);
         db.verwijderGebruiker(databank, id);
+        log(gebruiker, 'gebruiker verwijderd', weg ? weg.naam : String(id), '');
         return stuurJson(res, 200, { verwijderd: true });
       }
     }

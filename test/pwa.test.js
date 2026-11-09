@@ -42,6 +42,13 @@ test('de service worker bewaart de hele schil in de cache', () => {
   assert.match(sw, /'\/api\/'/);
 });
 
+test('de service worker haalt de schil vers op, niet uit de HTTP-cache', () => {
+  const sw = lees('sw.js');
+  // De server stuurt max-age=300 mee. Zonder cache: 'reload' houdt de telefoon
+  // na een nieuwe versie vijf minuten de oude app, ook al is de cachenaam omhoog.
+  assert.match(sw, /cache: 'reload'/, 'de schil hoort met cache: reload opgehaald te worden');
+});
+
 test('de cachenaam is opgehoogd ten opzichte van de eerste versie', () => {
   const sw = lees('sw.js');
   const naam = /var CACHE = '([^']+)'/.exec(sw);

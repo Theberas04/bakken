@@ -186,3 +186,92 @@ textarea { min-height: 74px; resize: vertical; }
 .klein { font-size: 13px; color: var(--zacht); }
 .offline { background: var(--geel-zacht); color: #7a5300; font-size: 13px; padding: 8px 12px;
   border-radius: 9px; margin-bottom: 12px; }
+
+/* ------------------------------------------------------------ donkere stand --- */
+/* Dezelfde rust, maar donker. De keuze staat in localStorage, zodat de app hem
+   onthoudt; zonder keuze volgt hij de stand van het toestel. */
+html[data-donker="1"] {
+  --ink: #e9eaea;
+  --zacht: #9aa0a6;
+  --lijn: #34383b;
+  --papier: #14171a;
+  --wit: #1c2024;
+  --accent: #4fb396;
+  --accent-zacht: #1e2f2b;
+  --rood: #ff9a9a;
+  --rood-zacht: #3a2222;
+  --geel-zacht: #3a3117;
+}
+html[data-donker="1"] .rij-knop:hover { border-color: #565c60; }
+html[data-donker="1"] .fotos .weg { background: rgba(20,23,26,0.9); border-color: #5a3030; }
+html[data-donker="1"] .printvel .sticker-vak { border-color: #555; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-donker="0"]) {
+    --ink: #e9eaea; --zacht: #9aa0a6; --lijn: #34383b; --papier: #14171a; --wit: #1c2024;
+    --accent: #4fb396; --accent-zacht: #1e2f2b; --rood: #ff9a9a; --rood-zacht: #3a2222;
+    --geel-zacht: #3a3117;
+  }
+}
+
+/* --------------------------------------------------------------- totaalrij --- */
+.totaalrij { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px;
+  color: var(--zacht); margin: 0 2px 12px; }
+.totaalrij b { color: var(--ink); font-weight: 650; }
+
+/* ---------------------------------------------------------------- filters --- */
+.filters { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 10px; margin: 0 -2px;
+  -webkit-overflow-scrolling: touch; }
+.filters::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none; font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--lijn); background: var(--wit); color: inherit; cursor: pointer;
+  white-space: nowrap;
+}
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chip .weg-teken { opacity: 0.75; margin-left: 6px; }
+.filter-regel { display: flex; align-items: baseline; gap: 10px; margin: 2px 0 8px; }
+
+/* ------------------------------------------------------------ groepskop --- */
+.groepskop { display: flex; align-items: baseline; justify-content: space-between;
+  margin: 18px 2px 8px; }
+.groepskop h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--zacht); margin: 0; font-weight: 650; }
+.groepskop span { font-size: 12px; color: var(--zacht); }
+
+/* --------------------------------------------------------- zoekuitkomsten --- */
+.uitkomst { display: flex; width: 100%; text-align: left; align-items: center; gap: 12px;
+  background: var(--wit); border: 1px solid var(--lijn); border-radius: var(--rond);
+  padding: 11px 14px; margin: 0 0 8px; font: inherit; cursor: pointer; color: inherit; }
+.uitkomst .groot { flex: 1; min-width: 0; }
+.uitkomst .groot strong { display: block; font-weight: 620; font-size: 15px; }
+.uitkomst .groot small { display: block; color: var(--zacht); font-size: 13px; }
+.uitkomst .waar { flex: none; font-size: 12px; color: var(--zacht); text-align: right; }
+
+/* ------------------------------------------------------------ grote foto --- */
+.fotogroot {
+  position: fixed; inset: 0; z-index: 60; background: rgba(10,12,14,0.94);
+  display: grid; grid-template-rows: 1fr auto; padding: 14px;
+  padding-top: calc(14px + env(safe-area-inset-top));
+}
+.fotogroot img { max-width: 100%; max-height: 100%; margin: auto; border-radius: 10px; }
+.fotogroot .balk-onder { display: flex; gap: 10px; justify-content: center; align-items: center;
+  color: #fff; font-size: 14px; padding-top: 10px; }
+.fotogroot button { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.25); color: #fff; }
+
+/* --------------------------------------------------------------- logboek --- */
+.logregel { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--lijn);
+  font-size: 14px; }
+.logregel:last-child { border-bottom: 0; }
+.logregel .wanneer { flex: none; color: var(--zacht); font-size: 12px; min-width: 92px; }
+.logregel .wat { flex: 1; min-width: 0; }
+.logregel .wie { flex: none; color: var(--zacht); font-size: 12px; }
+
+/* --------------------------------------------------------- groot printvel --- */
+.printvel.groot { grid-template-columns: repeat(2, 1fr); gap: 8mm; }
+.printvel.groot .sticker-vak { padding: 5mm; gap: 2.5mm; }
+.printvel.groot .sticker-vak .naam { font-size: 14pt; }
+.printvel.groot .sticker-vak .code { font-size: 11pt; }
+@media print {
+  .printvel.groot { grid-template-columns: repeat(2, 1fr); gap: 8mm; }
+}
+
