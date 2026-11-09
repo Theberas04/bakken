@@ -18,7 +18,7 @@ const rechten = require('./lib/rechten');
 const versie = require('./lib/versie');
 const codes = require('./lib/codes');
 
-const VERSIE = '0.5.1';
+const VERSIE = '0.5.2';
 const REPO = 'Theberas04/bakken';
 const VERSIE_BRON = 'https://raw.githubusercontent.com/' + REPO + '/main/VERSIE.json';
 const UPDATE_SCRIPT_STANDAARD = 'deploy/proxmox/bijwerken-in-de-app.sh';

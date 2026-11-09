@@ -1,5 +1,10 @@
 # Wat er per versie veranderd is
 
+## 0.5.2 - 9 november 2026
+- Klaagt Proxmox alsnog dat het nummer bezet is ("VM <nr> already exists"), dan wijkt de
+  installer automatisch uit naar het volgende vrije nummer in plaats van te stoppen. Dat dekt
+  ook nummers die alleen Proxmox zelf kent.
+
 ## 0.5.1 - 9 november 2026
 - De installer koos een nummer dat al door een **gewone VM** in gebruik was (`pct` ziet alleen
   containers). Hij kijkt nu ook met `qm` en naar de configuratiebestanden van containers en VM's,

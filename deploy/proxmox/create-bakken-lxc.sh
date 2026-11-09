@@ -122,17 +122,52 @@ fi
 melding "Containerschijf op: $OPSLAG   sjabloon op: ${SJABLOON%%:*}"
 melding "Sjabloon: $SJABLOON"
 
-pct create "$CTID" "$SJABLOON" \
-  --hostname "$HOSTNAME_CT" \
-  --cores "$CORES" \
-  --memory "$GEHEUGEN" \
-  --swap 512 \
-  --rootfs "$OPSLAG:$SCHIJF" \
-  --net0 "name=eth0,bridge=$BRIDGE,ip=dhcp" \
-  --features nesting=1 \
-  --unprivileged 1 \
-  --onboot 1 \
-  --start 1 >&2
+# Proxmox kan alsnog klagen dat het nummer bezet is, ook als de controle hierboven niets zag:
+# een VM die op een andere knoop van het cluster staat, een container die half is aangemaakt, of
+# iets wat alleen Proxmox zelf weet. In dat geval schuiven we door naar het volgende vrije nummer
+# in plaats van de hele installatie te laten mislukken.
+aanmaken() {
+  pct create "$1" "$SJABLOON" \
+    --hostname "$HOSTNAME_CT" \
+    --cores "$CORES" \
+    --memory "$GEHEUGEN" \
+    --swap 512 \
+    --rootfs "$OPSLAG:$SCHIJF" \
+    --net0 "name=eth0,bridge=$BRIDGE,ip=dhcp" \
+    --features nesting=1 \
+    --unprivileged 1 \
+    --onboot 1 \
+    --start 1
+}
+
+GELUKT=0
+for poging in $(seq 1 25); do
+  if UITVOER="$(aanmaken "$CTID" 2>&1)"; then
+    printf '%s\n' "$UITVOER" >&2
+    GELUKT=1
+    break
+  fi
+  printf '%s\n' "$UITVOER" >&2
+  if printf '%s' "$UITVOER" | grep -qi "already exists"; then
+    VOLGEND=""
+    for kandidaat in $(seq $((CTID + 1)) 299); do
+      if ! nummer_bezet "$kandidaat"; then VOLGEND="$kandidaat"; break; fi
+    done
+    if [ -z "$VOLGEND" ]; then
+      melding "Nummer $CTID is bezet en ik vind geen vrij nummer meer. Geef er zelf een mee: CTID=<nummer>."
+      exit 1
+    fi
+    melding "Nummer $CTID blijkt toch bezet; ik probeer nummer $VOLGEND."
+    CTID="$VOLGEND"
+    continue
+  fi
+  melding "Het aanmaken van de container is gestopt; zie de regels hierboven."
+  exit 1
+done
+if [ "$GELUKT" != "1" ]; then
+  melding "Kon na 25 pogingen geen vrij nummer vinden. Geef er zelf een mee: CTID=<nummer>."
+  exit 1
+fi
 
 melding "Container $CTID gestart; wachten tot hij op het netwerk is..."
 for poging in $(seq 1 40); do

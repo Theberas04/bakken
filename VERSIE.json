@@ -1,6 +1,6 @@
 {
-  "versie": "0.5.1",
+  "versie": "0.5.2",
   "commit": "",
-  "boodschap": "Installatie slaat nummers van bestaande VM's over",
+  "boodschap": "Installatie wijkt uit als een nummer toch bezet blijkt",
   "datum": "2026-11-09"
 }

@@ -26,6 +26,13 @@ test('het aanmaakscript slaat nummers van gewone VM\'s over', () => {
   assert.match(aanmaak, /Geen vrij nummer gevonden/, 'zonder vrij nummer hoort het script eerlijk te stoppen');
 });
 
+test('het aanmaakscript probeert het volgende nummer als Proxmox toch klaagt', () => {
+  const aanmaak = lees('create-bakken-lxc.sh');
+  assert.match(aanmaak, /already exists/, 'een klacht dat het nummer bezet is hoort opgevangen te worden');
+  assert.match(aanmaak, /blijkt toch bezet/, 'en dan hoort het script het volgende nummer te proberen');
+  assert.match(aanmaak, /^echo "\$CTID"$/m, 'alleen het gekozen nummer mag op stdout staan');
+});
+
 test('elk script dat de installer uitvoert staat in de bestandenlijst', () => {
   const install = lees('install.sh');
   const lijst = install.slice(install.indexOf('FILES=('), install.indexOf(')\n', install.indexOf('FILES=(')));
