@@ -62,6 +62,10 @@ Bijwerken kan daarna vanuit de app (knop **Bijwerken** in de beheerkaart) of van
 
 Kijken of alles goed staat, zonder iets te veranderen:
 
-    bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/check-bakken.sh)" Gebruik een Cloudflare **named** tunnel met een
+    bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/check-bakken.sh)"
+
+De app op een vast https-adres zetten (nodig voor QR scannen op een telefoon):
+
+    TOKEN=<token-uit-het-cloudflare-dashboard> bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/tunnel-bakken.sh)" Gebruik een Cloudflare **named** tunnel met een
 vaste hostnaam; een quick tunnel geeft elke keer een nieuwe URL en dan werken geplakte
 stickers niet meer. Camera en installeren als app eisen https.

@@ -51,7 +51,7 @@ if [ "${RAW_BASE#file://}" = "$RAW_BASE" ] && [ -z "${COMMIT_VAST:-}" ]; then
 fi
 # Stempel van deze installer. Staat bovenaan de uitvoer, zodat je meteen ziet welke versie er
 # draait: een oude kopie (uit de schijfcache van GitHub, of een bewaard bestand) valt zo op.
-PAKKET_VERSIE="2026-11-09.8"
+PAKKET_VERSIE="2026-11-09.9"
 
 # Let op: hier hoort ELK script in te staan dat hieronder met 'bash "$TARGET_DIR/...' wordt
 # uitgevoerd (dus ook create-bakken-lxc.sh). Staat het er niet in, dan stopt de installatie met
@@ -78,6 +78,7 @@ FILES=(
   "deploy/proxmox/bijwerken-in-de-app.sh"
   "deploy/proxmox/update-from-github.sh"
   "deploy/proxmox/check-bakken.sh"
+  "deploy/proxmox/tunnel-bakken.sh"
 )
 
 if [ "$(id -u)" != "0" ] && [ "$FETCH_ONLY" != "1" ] && [ "$CONTROLEER_PAKKET" != "1" ]; then

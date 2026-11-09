@@ -69,6 +69,14 @@ test('nergens staat een vast container-nummer als voorbeeld', () => {
   }
 });
 
+test('de tunnel staat als eigen script klaar en zoekt de container zelf', () => {
+  const tunnel = lees('tunnel-bakken.sh');
+  assert.match(tunnel, /pct list/, 'de tunnel hoort de containers te doorzoeken als er geen nummer is');
+  assert.match(tunnel, /cloudflared service install/, 'de tunnel hoort als dienst te worden aangezet');
+  assert.ok(!/CTID=[0-9]+/.test(tunnel), 'de tunnel hoort geen vast nummer te noemen');
+  assert.match(tunnel, /Adres van de app/, 'het script hoort te zeggen wat je daarna in de app zet');
+});
+
 test('bijwerken zoekt de container zelf', () => {
   const bij = lees('update-from-github.sh');
   assert.match(bij, /pct list/, 'bijwerken hoort de containers te doorzoeken als er geen nummer is');

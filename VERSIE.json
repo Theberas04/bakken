@@ -1,6 +1,6 @@
 {
-  "versie": "0.5.3",
+  "versie": "0.6.0",
   "commit": "",
-  "boodschap": "Poort 80 werkt nu ook zonder root",
+  "boodschap": "Tunnel aanzetten met een eigen script",
   "datum": "2026-11-09"
 }

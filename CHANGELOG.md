@@ -1,5 +1,11 @@
 # Wat er per versie veranderd is
 
+## 0.6.0 - 9 november 2026
+- `tunnel-bakken.sh`: zet de Cloudflare Tunnel met vaste hostnaam aan, in de container zelf.
+  Het script zoekt de container, installeert `cloudflared`, zet de tunnel als dienst aan en
+  vertelt wat je daarna in de app zet. Zonder token legt het uit waar je dat vindt.
+- De tunnel-documentatie gebruikt geen container-nummer meer.
+
 ## 0.5.3 - 9 november 2026
 - De dienst kreeg geen recht om op poort 80 te luisteren en stopte met
   `listen EACCES: permission denied 0.0.0.0:80`. De dienst krijgt nu precies dat ene recht

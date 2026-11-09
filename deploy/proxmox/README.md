@@ -57,21 +57,25 @@ dat hoort erbij. Wacht tien tellen en herlaad.
 Gebruik een **named tunnel**, geen quick tunnel. Een quick tunnel krijgt elke keer een nieuwe
 URL, en dan werken de QR-stickers die je al geplakt hebt niet meer.
 
-1. Maak in het Cloudflare-dashboard een tunnel aan (Zero Trust → Networks → Tunnels) en kies
-   de hostnaam waarop de app moet komen.
-2. Zet de publieke hostnaam op de dienst `http://<ip-van-de-container>/`.
-3. Installeer de tunnel als dienst in de container, met het token uit het dashboard:
+1. Maak in het Cloudflare-dashboard een tunnel aan (Zero Trust → Networks → Tunnels → Create a
+   tunnel), kies **Cloudflared**, en geef de tunnel een naam.
+2. Op het scherm *Install and run a connector* staat het token. Kopieer dat lange stuk.
+3. Voeg een **Public hostname** toe met als dienst `HTTP` → `127.0.0.1` (de tunnel loopt in
+   dezelfde container als de app).
+4. Laat **Cloudflare Access uit**. De app heeft zijn eigen inlog; Access zou een tweede
+   inlogscherm geven.
+5. Draai dit op de host — het zoekt de container zelf en zet de tunnel als dienst aan:
 
 ```bash
-pct exec <nummer> -- bash -c "curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared && chmod 755 /usr/local/bin/cloudflared"
-pct exec <nummer> -- cloudflared service install <TOKEN>
+TOKEN=<token-uit-het-dashboard> bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/tunnel-bakken.sh)"
 ```
 
-4. Zet in de app bij **Beheer → Adres van de app** dat vaste adres. Nieuwe stickers gebruiken
-   het dan automatisch. Bestaande stickers blijven werken: de app leest de code uit elke link.
+Zonder token vertelt dat script je precies waar je het token vindt; je kunt het dus ook eerst
+zonder token draaien.
 
-Het container-nummer vind je met `pct list` — het is de container met hostnaam `bakken`;
-vervang hierboven `<nummer>` daarmee.
+6. Zet in de app bij **Beheer → Adres van de app** dat vaste adres (bijvoorbeeld
+   `https://bakken.<jouw-domein>`). Nieuwe stickers gebruiken het dan automatisch. Bestaande
+   stickers blijven werken: de app leest de code uit elke link.
 
 Camera en installatie als app eisen https. Achter de tunnel krijg je dat gratis; op een kaal
 `http://192.168.…`-adres werkt scannen in de browser niet.
