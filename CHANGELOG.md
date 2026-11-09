@@ -1,5 +1,11 @@
 # Wat er per versie veranderd is
 
+## 0.4.0 - 9 november 2026
+- Het installatiescript maakt zelf een Debian-container aan (zoals bij de andere apps), in
+  plaats van een bestaande container te vragen. Staat Bakken al in een container, dan wordt die
+  opnieuw ingericht. Instellingen zoals `GEHEUGEN`, `SCHIJF`, `BRIDGE` en `OPSLAG` zijn
+  optioneel.
+
 ## 0.3.1 - 9 november 2026
 - Installatie en bijwerken zonder container-nummer: het script zoekt de container waar Bakken in
   staat, of de enige draaiende container, en vraagt het nummer alleen als het moet.

@@ -51,7 +51,7 @@ Gegevens horen buiten dit repo: `DATA_DIR`, `DB_PATH` en `MEDIA_DIR` wijzen ze a
 
 ## Installeren op je Proxmox-server
 
-Een bestaande container inrichten vanaf de host:
+Vanaf de host (het script maakt zelf een Debian-container aan):
 
     bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/install.sh)"
 

@@ -1,6 +1,6 @@
 {
-  "versie": "0.3.1",
+  "versie": "0.4.0",
   "commit": "",
-  "boodschap": "Installer zoekt de container zelf, geen nummer nodig",
+  "boodschap": "Installer maakt zelf een container aan, geen nummer nodig",
   "datum": "2026-11-09"
 }

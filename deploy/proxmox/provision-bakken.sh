@@ -7,7 +7,9 @@
 # install.sh heeft gevuld. Met SRC=/pad/naar/checkout kun je een lokale werkboom
 # naar de container sturen zonder GitHub.
 #
-# Er wordt GEEN container aangemaakt: Tom gebruikt een bestaande container.
+# De container wordt NIET hier gemaakt: install.sh maakt er een aan met
+# create-bakken-lxc.sh en roept dit script daarna aan. Zo kun je dit script ook los
+# gebruiken op een container die al bestaat.
 set -euo pipefail
 
 # Het container-id kan als eerste argument komen, via de omgeving (CTID=104 ...)

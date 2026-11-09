@@ -1,6 +1,6 @@
 # Bakken op je Proxmox-server
 
-De app draait in een **bestaande** Debian-container (geen nieuwe container nodig), op
+Het installatiescript **maakt zelf een Debian-container** aan (zoals bij de andere apps), op
 poort **8080**, met een systemd-dienst. De gegevens staan in `/var/lib/bakken`, de code in
 `/opt/bakken`. Bijwerken laat de gegevens met rust.
 
@@ -12,14 +12,23 @@ Op de Proxmox-host zelf, als root:
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/install.sh)"
 ```
 
-Je hoeft geen container-nummer te weten: het script zoekt de container waar Bakken al in staat,
-en anders de enige draaiende container. Zijn er meerdere, dan toont het de lijst en vraagt het
-het nummer. Een nummer meegeven mag ook: `CTID=104 bash -c "$(curl …)"`.
+Je hoeft geen container-nummer te weten: het script zoekt een vrij nummer, maakt de container
+aan, zet Node.js 22 en de dienst erin, en controleert met `/healthz` of de app echt antwoordt.
+Staat Bakken al in een container, dan wordt die opnieuw ingericht in plaats van dat er een
+tweede naast komt.
 
-De installer haalt de nieuwste bestanden van GitHub, installeert Node.js 22 in de container,
-maakt de gebruiker `bakken`, zet de dienst op en controleert met `/healthz` of de app echt
-antwoordt. Zegt hij dat de app niet antwoordt, dan print hij de dienst-status en de laatste
-logregels.
+Instellingen voor het aanmaken (allemaal optioneel):
+
+| Variabele | Standaard | Betekenis |
+|---|---|---|
+| `CTID` | eerste vrije vanaf 100 | nummer van de nieuwe container |
+| `HOSTNAME_CT` | `bakken` | hostnaam in de container |
+| `GEHEUGEN` | `1024` | geheugen in MB |
+| `SCHIJF` | `8` | schijf in GB |
+| `CORES` | `2` | processors |
+| `BRIDGE` | `vmbr0` | netwerkbrug |
+| `OPSLAG` | `local-lvm` | opslag voor de containerschijf |
+| `POORT` | `8080` | poort van de app in de container |
 
 Alleen de bestanden ophalen, zonder installeren (handig om te proberen):
 
@@ -60,7 +69,8 @@ pct exec <nummer> -- cloudflared service install <TOKEN>
 4. Zet in de app bij **Beheer → Adres van de app** dat vaste adres. Nieuwe stickers gebruiken
    het dan automatisch. Bestaande stickers blijven werken: de app leest de code uit elke link.
 
-Het container-nummer vind je met `pct list`; vervang hierboven `<nummer>` daarmee.
+Het container-nummer vind je met `pct list` — het is de container met hostnaam `bakken`;
+vervang hierboven `<nummer>` daarmee.
 
 Camera en installatie als app eisen https. Achter de tunnel krijg je dat gratis; op een kaal
 `http://192.168.…`-adres werkt scannen in de browser niet.
