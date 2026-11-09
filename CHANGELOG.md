@@ -1,5 +1,15 @@
 # Wat er per versie veranderd is
 
+## 0.3.0 - 9 november 2026
+- Web-app: bakken met zoeken, bak-detail met voorraad (+ en -), foto's van de inhoud.
+- Codes: eigen naam per sticker, status vrij/gedrukt/geplakt, koppelen aan een bak.
+- Printvel: 48 stickers op A4 met de naam eronder, klaar voor de printer.
+- Beheer: gebruikers met rechten aan en uit, versiecontrole, het vaste adres voor QR-links.
+- PWA: manifest, pictogram en service worker; de app-schil staat in de cache, zodat de app en
+  een gescande sticker ook zonder internet openen. Wat je offline wijzigt, gaat in een
+  wachtrij en wordt later verstuurd.
+- Installatie voor een bestaande Proxmox-container, met bijwerken en een Cloudflare-tunnel.
+
 ## 0.2.0 - 9 november 2026
 - Server: API voor bakken, producten, codes, scannen en gebruikers.
 - Accounts: eerste keer instellen, inloggen, uitloggen, sessiekoekje met Secure achter https.

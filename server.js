@@ -9,6 +9,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 const db = require('./lib/db');
 const accounts = require('./lib/accounts');
@@ -16,7 +17,7 @@ const rechten = require('./lib/rechten');
 const versie = require('./lib/versie');
 const codes = require('./lib/codes');
 
-const VERSIE = '0.2.0';
+const VERSIE = '0.3.0';
 const REPO = 'Theberas04/bakken';
 const VERSIE_BRON = 'https://raw.githubusercontent.com/' + REPO + '/main/VERSIE.json';
 const UPDATE_SCRIPT_STANDAARD = 'deploy/proxmox/bijwerken-in-de-app.sh';
@@ -40,6 +41,10 @@ const MIME = {
 };
 
 const MAX_LOGINPOGINGEN = 8;
+// Foto's: hoeveel per bak en hoe groot het bestand mag zijn. De app verkleint
+// eerst op het toestel, dus dit is een bovengrens, geen richtlijn.
+const MAX_FOTOS_PER_BAK = 12;
+const MAX_FOTO_BYTES = 8 * 1024 * 1024;
 const LOGINVENSTER_MS = 15 * 60 * 1000;
 
 // ---------------------------------------------------------------- helpers ---
@@ -182,6 +187,50 @@ function maakApp(opties) {
     } finally {
       clearTimeout(stop);
     }
+  }
+
+  // Een foto komt binnen als base64 (de app verkleint hem eerst op het toestel).
+  // We kijken zelf naar de eerste bytes: een bestand dat geen foto is, gaat niet
+  // naar de schijf, ook niet als de naam of het soort iets anders zegt.
+  function fotoSoort(buffer) {
+    if (buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+      return { ext: 'jpg', mime: 'image/jpeg' };
+    }
+    if (buffer.length > 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+      return { ext: 'png', mime: 'image/png' };
+    }
+    if (buffer.length > 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') {
+      return { ext: 'webp', mime: 'image/webp' };
+    }
+    return null;
+  }
+
+  function bewaarFoto(bakId, lichaam) {
+    const bak = db.haalBak(databank, bakId);
+    if (!bak) throw new Error('Deze bak bestaat niet.');
+    const bestaand = db.lijstFotos(databank, bakId);
+    if (bestaand.length >= MAX_FOTOS_PER_BAK) {
+      throw new Error('Deze bak heeft al ' + MAX_FOTOS_PER_BAK + " foto's. Verwijder er eerst een.");
+    }
+    const gegevens = String((lichaam && lichaam.data) || '');
+    const ruw = gegevens.replace(/^data:[^;]*;base64,/, '');
+    if (!ruw) throw new Error('Er zit geen foto in dit verzoek.');
+    const buffer = Buffer.from(ruw, 'base64');
+    if (!buffer.length) throw new Error('De foto is leeg.');
+    if (buffer.length > MAX_FOTO_BYTES) {
+      throw new Error('De foto is te groot (maximaal ' + Math.round(MAX_FOTO_BYTES / 1024 / 1024) + ' MB).');
+    }
+    const soort = fotoSoort(buffer);
+    if (!soort) throw new Error('Dit bestand is geen JPEG-, PNG- of WebP-foto.');
+    const naam = bakId + '-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + '.' + soort.ext;
+    fs.writeFileSync(path.join(mediaDir, naam), buffer);
+    return db.voegFotoToe(databank, bakId, {
+      bestand: naam,
+      soort: soort.mime,
+      breedte: Number(lichaam && lichaam.breedte) || 0,
+      hoogte: Number(lichaam && lichaam.hoogte) || 0,
+      opServer: true
+    });
   }
 
   function versieOverzicht() {
@@ -399,7 +448,16 @@ function maakApp(opties) {
         if (!eisRecht(res, gebruiker, 'bakken_bekijken')) return;
         const bak = db.haalBak(databank, id);
         if (!bak) return stuurJson(res, 404, { fout: 'Deze bak bestaat niet.' });
-        return stuurJson(res, 200, { bak, producten: db.lijstItems(databank, id), fotos: db.lijstFotos(databank, id) });
+        // De sticker hoort bij de bak: de app toont hem meteen, zonder extra ronde.
+        const sticker = db.codeVanBak(databank, id);
+        return stuurJson(res, 200, {
+          bak: Object.assign({}, bak, {
+            code: sticker ? sticker.code : null,
+            codeNaam: sticker ? sticker.naam : ''
+          }),
+          producten: db.lijstItems(databank, id),
+          fotos: db.lijstFotos(databank, id)
+        });
       }
       if (methode === 'PATCH' || methode === 'PUT') {
         if (!eisRecht(res, gebruiker, 'bakken_wijzigen')) return;
@@ -480,6 +538,45 @@ function maakApp(opties) {
       if (methode === 'DELETE') {
         if (!eisRecht(res, gebruiker, 'codes_beheren')) return;
         db.verwijderCode(databank, code);
+        return stuurJson(res, 200, { verwijderd: true });
+      }
+    }
+
+    // Foto's van de inhoud van een bak. De app verkleint ze op het toestel en
+    // stuurt ze hier als base64; wij bewaren het bestand en geven het terug via
+    // /api/fotos/<id>. Zo staat er niets van de foto zelf in de databank.
+    m = /^\/api\/bakken\/(\d+)\/fotos$/.exec(pad);
+    if (m) {
+      const bakId = Number(m[1]);
+      if (methode === 'GET') {
+        if (!eisRecht(res, gebruiker, 'bakken_bekijken')) return;
+        return stuurJson(res, 200, { fotos: db.lijstFotos(databank, bakId) });
+      }
+      if (methode === 'POST') {
+        if (!eisRecht(res, gebruiker, 'bakken_wijzigen')) return;
+        const lichaam = await leesJson(req, MAX_FOTO_BYTES + 1024 * 1024);
+        return stuurJson(res, 201, { foto: bewaarFoto(bakId, lichaam) });
+      }
+    }
+
+    m = /^\/api\/fotos\/(\d+)$/.exec(pad);
+    if (m) {
+      const fotoId = Number(m[1]);
+      if (methode === 'GET') {
+        if (!eisRecht(res, gebruiker, 'bakken_bekijken')) return;
+        const rij = databank.prepare('SELECT * FROM fotos WHERE id = ?').get(fotoId);
+        if (!rij) return stuurJson(res, 404, { fout: 'Deze foto bestaat niet.' });
+        if (!stuurBestand(res, path.join(mediaDir, path.basename(rij.bestand)))) {
+          return stuurJson(res, 404, { fout: 'Het bestand van deze foto ontbreekt.' });
+        }
+        return;
+      }
+      if (methode === 'DELETE') {
+        if (!eisRecht(res, gebruiker, 'bakken_verwijderen')) return;
+        const weg = db.verwijderFoto(databank, fotoId);
+        try {
+          fs.unlinkSync(path.join(mediaDir, path.basename(weg.bestand)));
+        } catch (e) { /* het bestand was er al niet meer */ }
         return stuurJson(res, 200, { verwijderd: true });
       }
     }

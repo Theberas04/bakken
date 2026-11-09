@@ -43,7 +43,18 @@ Gegevens horen buiten dit repo: `DATA_DIR`, `DB_PATH` en `MEDIA_DIR` wijzen ze a
 
 - [x] Datalaag: gebruikers, sessies, bakken, producten, codes, foto's
 - [x] Server: inloggen, accounts, rechten, bakken en producten, codes en scannen, versiecontrole, `/healthz`
-- [ ] Web-app: bakken, scannen, codes, beheer
-- [ ] PWA: service worker, offline, QR-decoder
-- [ ] QR-generator en printvel
-- [ ] Proxmox-installatie en Cloudflare-tunnel
+- [x] Web-app: bakken, scannen, codes met eigen naam, beheer
+- [x] QR-generator en printvel (48 stickers op A4)
+- [x] PWA: manifest, pictogram, service worker met de app-schil in de cache
+- [ ] PWA: foto's offline opvangen
+- [x] Proxmox-installatie en Cloudflare-tunnel (zie `deploy/proxmox/README.md`)
+
+## Installeren op je Proxmox-server
+
+Een bestaande container inrichten vanaf de host:
+
+    CTID=104 bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/install.sh)"
+
+Bijwerken: zie `deploy/proxmox/README.md`. Gebruik een Cloudflare **named** tunnel met een
+vaste hostnaam; een quick tunnel geeft elke keer een nieuwe URL en dan werken geplakte
+stickers niet meer. Camera en installeren als app eisen https.

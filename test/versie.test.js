@@ -58,7 +58,7 @@ test('de versiecontrole meldt iets nieuws als GitHub verder is', async (t) => {
   assert.equal(controle.gegevens.nieuwer, true);
   assert.equal(controle.gegevens.laatste.versie, '9.9.9');
   assert.equal(controle.gegevens.laatste.boodschap, 'Iets heel nieuws');
-  assert.equal(controle.gegevens.versie, '0.2.0', 'de eigen versie komt mee');
+  assert.equal(controle.gegevens.versie, require('../server').VERSIE, 'de eigen versie komt mee');
 });
 
 test('de versiecontrole meldt niets nieuws als de app bij is', async (t) => {

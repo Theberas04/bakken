@@ -1,6 +1,6 @@
 {
-  "versie": "0.2.0",
+  "versie": "0.3.0",
   "commit": "",
-  "boodschap": "Server met inloggen, accounts en de versiecontrole",
+  "boodschap": "Web-app met QR-stickers, printvel en PWA (offline)",
   "datum": "2026-11-09"
 }

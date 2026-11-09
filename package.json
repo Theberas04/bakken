@@ -1,6 +1,6 @@
 {
   "name": "bakken",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Bakken - QR-stickers voor opbergbakken: voorraad per bak, foto's en accounts.",
   "type": "commonjs",
@@ -9,5 +9,8 @@
   },
   "scripts": {
     "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "jsqr": "^1.4.0"
   }
 }

@@ -3,160 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f6f5c">
+<meta name="description" content="Bakken: QR-stickers voor opbergbakken met de voorraad per bak.">
 <title>Bakken</title>
-<style>
-  :root { --ink: #1b1b1b; --muted: #6b6b6b; --lijn: #dcdcdc; --papier: #fbfbf9; --accent: #2f6d4f; }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--papier); color: var(--ink);
-         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  .top { position: sticky; top: 0; background: var(--papier); border-bottom: 1px solid var(--lijn); padding: 14px 18px;
-         display: flex; align-items: center; gap: 12px; }
-  .mark { width: 30px; height: 30px; border-radius: 7px; background: var(--accent); color: #fff;
-          display: grid; place-items: center; font-weight: 700; }
-  .top h1 { font-size: 17px; margin: 0; font-weight: 600; }
-  .top p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
-  main { padding: 18px; max-width: 640px; }
-  .rij { background: #fff; border: 1px solid var(--lijn); border-radius: 10px; padding: 14px 16px; margin: 0 0 12px; }
-  .rij h2 { font-size: 15px; margin: 0 0 4px; }
-  .rij p { margin: 0; color: var(--muted); font-size: 14px; }
-  .knoppen { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-  button { font: inherit; padding: 9px 14px; border-radius: 8px; border: 1px solid var(--lijn); background: #fff; cursor: pointer; }
-  button.hoofd { background: var(--ink); color: #fff; border-color: var(--ink); }
-  label { display: block; font-size: 14px; margin: 10px 0 4px; }
-  input { font: inherit; width: 100%; padding: 9px 11px; border: 1px solid var(--lijn); border-radius: 8px; background: #fff; }
-  .melding { margin-top: 12px; font-size: 14px; }
-  .melding.fout { color: #a52222; }
-  .melding.goed { color: var(--accent); }
-  [hidden] { display: none !important; }
-</style>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<header class="top">
-  <span class="mark" aria-hidden="true">B</span>
-  <div>
-    <h1>Bakken</h1>
-    <p id="ondertitel">jouw bakken, op dit toestel</p>
-  </div>
-</header>
-
-<main>
-  <div class="rij">
-    <h2>Deze versie</h2>
-    <p>De opslag en de server staan er. De schermen (bakken, scannen, codes) komen in de
-       volgende versie; hieronder kun je het account alvast instellen.</p>
-  </div>
-
-  <div class="rij" id="kaart-instellen">
-    <h2>Eerste keer: je account instellen</h2>
-    <p>Er is nog geen account. Kies de naam en het wachtwoord van de beheerder.</p>
-    <label for="naam">Gebruikersnaam</label>
-    <input id="naam" autocomplete="username" value="Tom">
-    <label for="wachtwoord">Wachtwoord (minstens 10 tekens)</label>
-    <input id="wachtwoord" type="password" autocomplete="new-password">
-    <div class="knoppen"><button class="hoofd" id="instellen">Account instellen</button></div>
-    <div class="melding" id="melding-instellen" hidden></div>
-  </div>
-
-  <div class="rij" id="kaart-inloggen" hidden>
-    <h2>Inloggen</h2>
-    <label for="naam-in">Gebruikersnaam</label>
-    <input id="naam-in" autocomplete="username">
-    <label for="wachtwoord-in">Wachtwoord</label>
-    <input id="wachtwoord-in" type="password" autocomplete="current-password">
-    <div class="knoppen"><button class="hoofd" id="inloggen">Inloggen</button></div>
-    <div class="melding" id="melding-inloggen" hidden></div>
-  </div>
-
-  <div class="rij" id="kaart-versie" hidden>
-    <h2>Versie</h2>
-    <p id="versie-tekst">…</p>
-    <div class="knoppen">
-      <button id="controleer">Controleer op een nieuwe versie</button>
-      <button id="uitloggen">Uitloggen</button>
-    </div>
-    <div class="melding" id="melding-versie" hidden></div>
+<a class="overslaan" href="#inhoud">Naar de inhoud</a>
+<header id="kop" class="kop" hidden></header>
+<main id="inhoud">
+  <div id="app">
+    <p class="laden">Bakken wordt geladen…</p>
   </div>
 </main>
-
+<nav id="balk" class="balk" hidden aria-label="Hoofdmenu"></nav>
+<div id="zweef" class="zweef" hidden></div>
+<script src="/lib/qrcode.js"></script>
+<script src="/lib/qr.js"></script>
+<script src="/app.js"></script>
 <script>
-(function () {
-  'use strict';
-  var $ = function (id) { return document.getElementById(id); };
-
-  function api(pad, opties) {
-    var o = opties || {};
-    return fetch(pad, {
-      method: o.methode || 'GET',
-      headers: o.lichaam ? { 'content-type': 'application/json' } : {},
-      body: o.lichaam ? JSON.stringify(o.lichaam) : undefined
-    }).then(function (antwoord) {
-      return antwoord.json().then(function (data) {
-        if (!antwoord.ok) throw new Error(data.fout || ('Fout ' + antwoord.status));
-        return data;
-      });
+  // De schil in de cache zetten, zodat de app en een gescande sticker ook
+  // zonder internet openen. Lukt het niet, dan werkt de app gewoon door.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
     });
   }
-
-  function toon(id, tekst, soort) {
-    var vak = $(id);
-    vak.textContent = tekst;
-    vak.className = 'melding' + (soort ? ' ' + soort : '');
-    vak.hidden = false;
-  }
-
-  function toonVersie(ingesteld) {
-    $('kaart-instellen').hidden = ingesteld;
-    $('kaart-inloggen').hidden = ingesteld;
-    $('kaart-versie').hidden = true;
-  }
-
-  function naInloggen(gebruiker) {
-    $('kaart-instellen').hidden = true;
-    $('kaart-inloggen').hidden = true;
-    $('kaart-versie').hidden = false;
-    $('ondertitel').textContent = gebruiker.naam + (gebruiker.rol === 'beheerder' ? ' - beheerder' : '');
-    api('/api/versie').then(function (data) {
-      $('versie-tekst').textContent = 'Bakken ' + data.versie + (data.commit ? ' (' + data.commit + ')' : '');
-    }).catch(function () {});
-  }
-
-  api('/api/status').then(function (data) {
-    toonVersie(data.ingesteld);
-    api('/api/ik').then(naInloggen).catch(function () {});
-  }).catch(function () {
-    toonVersie(false);
-  });
-
-  $('instellen').addEventListener('click', function () {
-    api('/api/instellen', { methode: 'POST', lichaam: { naam: $('naam').value, wachtwoord: $('wachtwoord').value } })
-      .then(function (data) { naInloggen(data.gebruiker); })
-      .catch(function (e) { toon('melding-instellen', e.message, 'fout'); });
-  });
-
-  $('inloggen').addEventListener('click', function () {
-    api('/api/inloggen', { methode: 'POST', lichaam: { naam: $('naam-in').value, wachtwoord: $('wachtwoord-in').value } })
-      .then(function (data) { naInloggen(data.gebruiker); })
-      .catch(function (e) { toon('melding-inloggen', e.message, 'fout'); });
-  });
-
-  $('controleer').addEventListener('click', function () {
-    toon('melding-versie', 'Even kijken wat er op GitHub staat…');
-    api('/api/versie/controle').then(function (data) {
-      if (data.laatste && data.laatste.fout) { toon('melding-versie', data.laatste.fout, 'fout'); return; }
-      var hier = data.hier ? ' (' + data.hier + ')' : '';
-      if (data.nieuwer) {
-        toon('melding-versie', 'Er staat iets nieuws klaar: "' + data.laatste.boodschap + '". ' +
-          (data.updateMogelijk ? 'Druk op Bijwerken om het te halen.' : 'Draai het commando op je host.'), 'goed');
-      } else {
-        toon('melding-versie', 'Je draait de nieuwste versie' + hier + '.', 'goed');
-      }
-    }).catch(function (e) { toon('melding-versie', e.message, 'fout'); });
-  });
-
-  $('uitloggen').addEventListener('click', function () {
-    api('/api/uitloggen', { methode: 'POST' }).then(function () { location.reload(); });
-  });
-})();
 </script>
 </body>
 </html>
