@@ -53,7 +53,7 @@ Gegevens horen buiten dit repo: `DATA_DIR`, `DB_PATH` en `MEDIA_DIR` wijzen ze a
 
 Een bestaande container inrichten vanaf de host:
 
-    CTID=104 bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/install.sh)"
+    bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/install.sh)"
 
 Bijwerken: zie `deploy/proxmox/README.md`. Gebruik een Cloudflare **named** tunnel met een
 vaste hostnaam; een quick tunnel geeft elke keer een nieuwe URL en dan werken geplakte

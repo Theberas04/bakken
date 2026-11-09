@@ -3,7 +3,10 @@
 #
 # Op de Proxmox-host, als root:
 #
-#   CTID=104 bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/bijwerken.sh)"
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/bijwerken.sh)"
+#
+# Je hoeft geen container-nummer te weten: het script zoekt de container waar
+# Bakken in staat. CTID=<nummer> meegeven mag ook.
 #
 # Het haalt de bestanden van de nieuwste commit op, stuurt ze naar de bestaande
 # container en herstart de dienst. De gegevens in DATA_DIR blijven staan.
@@ -24,11 +27,30 @@ if [ "$(id -u)" != "0" ]; then
   exit 1
 fi
 if [ -z "$CTID" ]; then
-  echo "Gebruik: CTID=<nummer> bash bijwerken.sh" >&2
-  exit 1
+  # Zoek de container waar Bakken in staat, zodat je geen nummer hoeft te weten.
+  echo "== Geen nummer meegegeven; ik zoek de container met Bakken"
+  GEVONDEN=""
+  for kandidaat in $(pct list | awk 'NR > 1 {print $1}'); do
+    if pct exec "$kandidaat" -- test -d "$APP_DIR" 2>/dev/null; then
+      GEVONDEN="$GEVONDEN $kandidaat"
+    fi
+  done
+  AANTAL="$(printf '%s\n' $GEVONDEN | grep -c '[0-9]' || true)"
+  if [ "$AANTAL" = "1" ]; then
+    CTID="$(printf '%s\n' $GEVONDEN | head -1)"
+    echo "   gevonden: container $CTID"
+  else
+    pct list >&2
+    if [ -e /dev/tty ]; then
+      read -r -p "Welk container-nummer? " CTID < /dev/tty
+    else
+      echo "Geef het nummer mee: CTID=<nummer> bash -c \"\$(curl -fsSL .../bijwerken.sh)\"" >&2
+      exit 1
+    fi
+  fi
 fi
-if ! pct status "$CTID" >/dev/null 2>&1; then
-  echo "Container $CTID bestaat niet." >&2
+if ! printf '%s' "$CTID" | grep -qE '^[0-9]+$' || ! pct status "$CTID" >/dev/null 2>&1; then
+  echo "Container '$CTID' bestaat niet op deze host." >&2
   exit 1
 fi
 

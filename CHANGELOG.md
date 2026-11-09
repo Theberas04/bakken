@@ -1,5 +1,9 @@
 # Wat er per versie veranderd is
 
+## 0.3.1 - 9 november 2026
+- Installatie en bijwerken zonder container-nummer: het script zoekt de container waar Bakken in
+  staat, of de enige draaiende container, en vraagt het nummer alleen als het moet.
+
 ## 0.3.0 - 9 november 2026
 - Web-app: bakken met zoeken, bak-detail met voorraad (+ en -), foto's van de inhoud.
 - Codes: eigen naam per sticker, status vrij/gedrukt/geplakt, koppelen aan een bak.

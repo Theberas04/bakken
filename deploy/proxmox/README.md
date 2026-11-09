@@ -4,15 +4,17 @@ De app draait in een **bestaande** Debian-container (geen nieuwe container nodig
 poort **8080**, met een systemd-dienst. De gegevens staan in `/var/lib/bakken`, de code in
 `/opt/bakken`. Bijwerken laat de gegevens met rust.
 
-Vervang hieronder `104` door het nummer van jouw container.
-
 ## Installeren (eenmalig)
 
 Op de Proxmox-host zelf, als root:
 
 ```bash
-CTID=104 bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/install.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/install.sh)"
 ```
+
+Je hoeft geen container-nummer te weten: het script zoekt de container waar Bakken al in staat,
+en anders de enige draaiende container. Zijn er meerdere, dan toont het de lijst en vraagt het
+het nummer. Een nummer meegeven mag ook: `CTID=104 bash -c "$(curl …)"`.
 
 De installer haalt de nieuwste bestanden van GitHub, installeert Node.js 22 in de container,
 maakt de gebruiker `bakken`, zet de dienst op en controleert met `/healthz` of de app echt
@@ -28,8 +30,10 @@ FETCH_ONLY=1 bash deploy/proxmox/install.sh
 ## Bijwerken
 
 ```bash
-CTID=104 bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/bijwerken.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/bijwerken.sh)"
 ```
+
+Ook hier is het nummer optioneel: het script zoekt de container waar Bakken in staat.
 
 Of vanuit de app: **Beheer → Controleer op een nieuwe versie → Bijwerken**. De app start het
 bijwerken niet zelf; hij toont het commando. Dat is bewust: de app mag de dienst waar hij zelf
@@ -45,16 +49,18 @@ URL, en dan werken de QR-stickers die je al geplakt hebt niet meer.
 
 1. Maak in het Cloudflare-dashboard een tunnel aan (Zero Trust → Networks → Tunnels) en kies
    de hostnaam waarop de app moet komen.
-2. Zet de publieke hostnaam op de dienst `http://<ip-van-container-104>:8080`.
+2. Zet de publieke hostnaam op de dienst `http://<ip-van-de-container>:8080`.
 3. Installeer de tunnel als dienst in de container, met het token uit het dashboard:
 
 ```bash
-pct exec 104 -- bash -c "curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared && chmod 755 /usr/local/bin/cloudflared"
-pct exec 104 -- cloudflared service install <TOKEN>
+pct exec <nummer> -- bash -c "curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared && chmod 755 /usr/local/bin/cloudflared"
+pct exec <nummer> -- cloudflared service install <TOKEN>
 ```
 
 4. Zet in de app bij **Beheer → Adres van de app** dat vaste adres. Nieuwe stickers gebruiken
    het dan automatisch. Bestaande stickers blijven werken: de app leest de code uit elke link.
+
+Het container-nummer vind je met `pct list`; vervang hierboven `<nummer>` daarmee.
 
 Camera en installatie als app eisen https. Achter de tunnel krijg je dat gratis; op een kaal
 `http://192.168.…`-adres werkt scannen in de browser niet.
@@ -62,9 +68,9 @@ Camera en installatie als app eisen https. Achter de tunnel krijg je dat gratis;
 ## Controleren of alles loopt
 
 ```bash
-pct exec 104 -- systemctl status bakken --no-pager -l | tail -20
-pct exec 104 -- curl -fsS http://127.0.0.1:8080/healthz
-pct exec 104 -- journalctl -u bakken -n 40 --no-pager
+pct exec <nummer> -- systemctl status bakken --no-pager -l | tail -20
+pct exec <nummer> -- curl -fsS http://127.0.0.1:8080/healthz
+pct exec <nummer> -- journalctl -u bakken -n 40 --no-pager
 ```
 
 ## Gegevens veiligstellen
@@ -73,7 +79,7 @@ Alles wat de app bewaart staat in `/var/lib/bakken`: de databank en de foto's. E
 vanaf de host:
 
 ```bash
-pct exec 104 -- tar czf - /var/lib/bakken > bakken-backup-$(date +%F).tar.gz
+pct exec <nummer> -- tar czf - /var/lib/bakken > bakken-backup-$(date +%F).tar.gz
 ```
 
 Terugzetten: stop de dienst, pak de tar uit in de container, start de dienst weer.
@@ -83,7 +89,7 @@ Terugzetten: stop de dienst, pak de tar uit in de container, start de dienst wee
 Standaard 8080. Een andere poort geef je mee bij de installatie:
 
 ```bash
-CTID=104 POORT=8090 bash -c "$(curl -fsSL .../install.sh)"
+POORT=8090 bash -c "$(curl -fsSL .../install.sh)"
 ```
 
 Let op: bij het bijwerken moet dezelfde `POORT` bekend zijn, anders controleert het script de

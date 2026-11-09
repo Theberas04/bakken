@@ -1,6 +1,6 @@
 {
-  "versie": "0.3.0",
+  "versie": "0.3.1",
   "commit": "",
-  "boodschap": "Web-app met QR-stickers, printvel en PWA (offline)",
+  "boodschap": "Installer zoekt de container zelf, geen nummer nodig",
   "datum": "2026-11-09"
 }
