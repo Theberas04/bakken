@@ -10,11 +10,9 @@
 #   2. maakt een Debian-container aan (create-bakken-lxc.sh),
 #   3. richt de container in en start de dienst (provision-bakken.sh).
 #
-# Staat Bakken al in een container, dan wordt die opnieuw ingericht in plaats van dat er een
-# tweede bij komt.
-#
-# Alleen de bestanden ophalen, zonder container:
-#   FETCH_ONLY=1 bash deploy/proxmox/install.sh
+
+# Los testen zonder container:
+#   FETCH_ONLY=1 RAW_BASE=file://$PWD TARGET_DIR=/tmp/bakken-pakket bash deploy/proxmox/install.sh
 set -euo pipefail
 
 REPO_OWNER="${REPO_OWNER:-Theberas04}"
@@ -23,11 +21,17 @@ BRANCH="${BRANCH:-main}"
 RAW_BASE="${RAW_BASE:-https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAAM/$BRANCH}"
 TARGET_DIR="${TARGET_DIR:-/opt/bakken-pakket}"
 FETCH_ONLY="${FETCH_ONLY:-0}"
-CTID="${CTID:-}"
+CONTROLEER_PAKKET="${CONTROLEER_PAKKET:-0}"
 
-# Versheid: de ruwe URL van GitHub houdt een bestand vijf minuten vast. Daarom halen
-# we eerst de nieuwste commit op en halen alle bestanden van die vaste commit.
+# Versheid: de ruwe URL van GitHub houdt een bestand vijf minuten vast (cache-control
+# max-age=300) en een ?cb= erachter verandert daar niets aan — de schijfcache van GitHub kijkt
+# alleen naar het pad. Daarom halen we eerst de commit op waar de branch naar wijst en halen we
+# alle bestanden van die vastgezette commit: die is onveranderlijk, dus altijd gelijk aan wat er
+# in de repository staat. Lukt dat niet (geen internet naar de API), dan gaan we door met de
+# branch en melden we dat de bestanden even oud kunnen zijn.
 if [ "${RAW_BASE#file://}" = "$RAW_BASE" ] && [ -z "${COMMIT_VAST:-}" ]; then
+  # Eerst de Atom-feed van de commits: die is geen API, heeft geen limiet per IP en noemt de
+  # nieuwste commit bovenaan. De API geeft bij veel gebruik tijdelijk 403.
   COMMIT_VAST="$(curl -fsSL --max-time 20 \
     "https://github.com/$REPO_OWNER/$REPO_NAAM/commits/$BRANCH.atom" 2>/dev/null \
     | sed -n 's/.*Grit::Commit\/\([0-9a-f]\{40\}\).*/\1/p' | head -1)"
@@ -41,12 +45,17 @@ if [ "${RAW_BASE#file://}" = "$RAW_BASE" ] && [ -z "${COMMIT_VAST:-}" ]; then
     echo "== Commit ${COMMIT_VAST:0:7} van $BRANCH (alle bestanden komen uit die versie)"
   else
     echo "LET OP: kon de commit van $BRANCH niet ophalen; de bestanden kunnen tot vijf" >&2
-    echo "minuten oud zijn." >&2
+    echo "minuten oud zijn. Haal de nieuwste versie van dit script zo op:" >&2
+    echo "   bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAAM/$BRANCH/deploy/proxmox/install.sh)\"" >&2
   fi
 fi
+# Stempel van deze installer. Staat bovenaan de uitvoer, zodat je meteen ziet welke versie er
+# draait: een oude kopie (uit de schijfcache van GitHub, of een bewaard bestand) valt zo op.
+PAKKET_VERSIE="2026-11-09.5"
 
-PAKKET_VERSIE="2026-11-09.3"
-
+# Let op: hier hoort ELK script in te staan dat hieronder met 'bash "$TARGET_DIR/...' wordt
+# uitgevoerd (dus ook create-bakken-lxc.sh). Staat het er niet in, dan stopt de installatie met
+# 'No such file or directory'.
 FILES=(
   "server.js"
   "lib/accounts.js"
@@ -66,18 +75,35 @@ FILES=(
   "CHANGELOG.md"
   "deploy/proxmox/create-bakken-lxc.sh"
   "deploy/proxmox/provision-bakken.sh"
-  "deploy/proxmox/bijwerken.sh"
+  "deploy/proxmox/bijwerken-in-de-app.sh"
+  "deploy/proxmox/update-from-github.sh"
+  "deploy/proxmox/check-bakken.sh"
 )
 
-if [ "$(id -u)" != "0" ] && [ "$FETCH_ONLY" != "1" ]; then
+if [ "$(id -u)" != "0" ] && [ "$FETCH_ONLY" != "1" ] && [ "$CONTROLEER_PAKKET" != "1" ]; then
   echo "Draai dit als root op de Proxmox-host." >&2
   exit 1
 fi
 
+# Alleen bij een echte installatie is Proxmox-gereedschap nodig; het ophalen van de bestanden
+# (FETCH_ONLY=1) en het controleren van het pakket (CONTROLEER_PAKKET=1) werken overal.
+NODIG="pct pvesm curl"
+if [ "$FETCH_ONLY" = "1" ] || [ "$CONTROLEER_PAKKET" = "1" ]; then
+  NODIG="curl"
+  if [ "${RAW_BASE#file://}" != "$RAW_BASE" ]; then NODIG=""; fi
+fi
+for nodig in $NODIG; do
+  if ! command -v "$nodig" >/dev/null 2>&1; then
+    echo "Dit lijkt geen Proxmox-host: $nodig ontbreekt." >&2
+    exit 1
+  fi
+done
+
 haal_bestand() {
+  # $1 = het pad binnen de repository
   local f="$1"
   case "$f" in
-    *" "*|"") echo "Interne fout: bestandsnaam met een spatie ($f)." >&2; exit 1 ;;
+    *" "*) echo "Interne fout: bestandsnaam met een spatie ($f)." >&2; exit 1 ;;
   esac
   mkdir -p "$TARGET_DIR/$(dirname "$f")"
   if [ "${RAW_BASE#file://}" != "$RAW_BASE" ]; then
@@ -91,6 +117,16 @@ haal_bestand() {
   fi
 }
 
+zorg_voor() {
+  # Vangnet: een script dat uitgevoerd moet worden hoort in FILES te staan. Staat het er niet in
+  # (of is het weg), dan halen we het hier alsnog op in plaats van te stoppen met
+  # 'No such file or directory'.
+  local f="$1"
+  if [ -s "$TARGET_DIR/$f" ]; then return 0; fi
+  echo "   $f ontbrak in het pakket; alsnog opgehaald" >&2
+  haal_bestand "$f"
+}
+
 echo "== Bakken-installer $PAKKET_VERSIE"
 echo "== Bestanden ophalen van $RAW_BASE naar $TARGET_DIR"
 rm -rf "$TARGET_DIR"
@@ -100,65 +136,45 @@ for f in "${FILES[@]}"; do
   echo "   $f"
 done
 
+if [ "$CONTROLEER_PAKKET" = "1" ]; then
+  for nodig in deploy/proxmox/create-bakken-lxc.sh deploy/proxmox/provision-bakken.sh; do
+    zorg_voor "$nodig"
+  done
+  echo "== Pakket compleet in $TARGET_DIR (controle zonder container)"
+  exit 0
+fi
+
 if [ "$FETCH_ONLY" = "1" ]; then
   echo "== Alleen ophalen gevraagd (FETCH_ONLY=1): klaar in $TARGET_DIR"
   exit 0
 fi
 
-for nodig in pct pvesm; do
-  if ! command -v "$nodig" >/dev/null 2>&1; then
-    echo "Dit lijkt geen Proxmox-host: $nodig ontbreekt." >&2
-    echo "Draai dit op de host zelf, of gebruik FETCH_ONLY=1 om alleen de bestanden op te halen." >&2
-    exit 1
-  fi
-done
-
-# Waar moet het in? Een nummer dat je meegaf telt; anders kijken we of Bakken al ergens
-# staat, zodat een tweede keer installeren dezelfde container bijwerkt in plaats van een
-# tweede container naast de eerste te zetten.
-BESTAAND=""
-if [ -n "$CTID" ]; then
-  if ! printf '%s' "$CTID" | grep -qE '^[0-9]+$'; then
-    echo "Ongeldig container-nummer: '$CTID'." >&2
-    exit 1
-  fi
-  if pct status "$CTID" >/dev/null 2>&1; then BESTAAND="$CTID"; fi
-else
-  for kandidaat in $(pct list | awk 'NR > 1 {print $1}'); do
-    if pct exec "$kandidaat" -- test -d "${APP_DIR:-/opt/bakken}" 2>/dev/null; then
-      BESTAAND="$kandidaat"
-      break
-    fi
-  done
+# Net als bij de andere apps: de installer maakt zelf een container aan.
+echo "== Container aanmaken"
+zorg_voor deploy/proxmox/create-bakken-lxc.sh
+CTID="$(bash "$TARGET_DIR/deploy/proxmox/create-bakken-lxc.sh")"
+if ! printf '%s' "$CTID" | grep -qE '^[0-9]+$'; then
+  echo "Kon geen container-id bepalen (kreeg: '$CTID')." >&2
+  exit 1
 fi
-
-if [ -n "$BESTAAND" ]; then
-  CTID="$BESTAAND"
-  echo "== Bakken staat al in container $CTID; ik richt die opnieuw in"
-else
-  echo "== Nieuwe container aanmaken"
-  if [ ! -s "$TARGET_DIR/deploy/proxmox/create-bakken-lxc.sh" ]; then
-    echo "Het aanmaakscript ontbreekt in het pakket; haal het alsnog op." >&2
-    haal_bestand deploy/proxmox/create-bakken-lxc.sh
-  fi
-  CTID="$(CTID="$CTID" bash "$TARGET_DIR/deploy/proxmox/create-bakken-lxc.sh")"
-  if ! printf '%s' "$CTID" | grep -qE '^[0-9]+$'; then
-    echo "Kon geen container-id bepalen (kreeg: '$CTID')." >&2
-    exit 1
-  fi
-  echo "   container $CTID"
-fi
+echo "   container $CTID"
 
 echo "== Container inrichten"
+zorg_voor deploy/proxmox/provision-bakken.sh
 COMMIT_VAST="${COMMIT_VAST:-}" bash "$TARGET_DIR/deploy/proxmox/provision-bakken.sh" "$CTID"
+
+# De app hoort te weten welke versie hij draait; een installatie uit een archief heeft geen .git.
+if [ -n "${COMMIT_VAST:-}" ]; then
+  pct exec "$CTID" -- bash -c "printf '%s\n' '$COMMIT_VAST' > ${DATA_DIR:-/var/lib/bakken}/commit.txt 2>/dev/null || true" 2>/dev/null || true
+fi
 
 IP="$(pct exec "$CTID" -- bash -c "ip -4 -o addr show dev eth0 | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || true)"
 echo
 echo "=============================================================="
-echo " Bakken draait in container $CTID (aangemaakt of bijgewerkt)"
-[ -n "$IP" ] && echo " Open in de container:  http://$IP:8080/"
+echo " Bakken draait in container $CTID"
+[ -n "$IP" ] && echo " Open op je telefoon of laptop:  http://$IP/"
 echo " Zet daar een Cloudflare Tunnel met vaste hostnaam voor, anders"
 echo " werkt de camera (QR scannen) niet: die eist https."
 echo " Bijwerken later:"
-echo "   bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAAM/$BRANCH/deploy/proxmox/bijwerken.sh)\""
+echo "   bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAAM/$BRANCH/deploy/proxmox/update-from-github.sh)\""
 echo "=============================================================="

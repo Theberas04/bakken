@@ -22,7 +22,7 @@ CTID="${1:-${CTID:-$KANDIDAAT0}}"
 APP_DIR="${APP_DIR:-/opt/bakken}"
 DATA_DIR="${DATA_DIR:-/var/lib/bakken}"
 GEBRUIKER="${GEBRUIKER:-bakken}"
-POORT="${POORT:-8080}"
+POORT="${POORT:-80}"
 SRC="${SRC:-/opt/bakken-pakket}"
 
 if [ "$(id -u)" != "0" ]; then
@@ -59,7 +59,9 @@ PAGINA=(
 DATA=(
   "VERSIE.json"
   "CHANGELOG.md"
-  "deploy/proxmox/bijwerken.sh"
+  "deploy/proxmox/bijwerken-in-de-app.sh"
+  "deploy/proxmox/update-from-github.sh"
+  "deploy/proxmox/check-bakken.sh"
 )
 
 for f in "${RUNTIME[@]}" "${PAGINA[@]}" "${DATA[@]}"; do
@@ -96,7 +98,7 @@ echo "== Bestanden naar de container sturen"
 for f in "${RUNTIME[@]}"; do pct push "$CTID" "$SRC/$f" "$APP_DIR/$f" --perms 644; done
 for f in "${PAGINA[@]}"; do pct push "$CTID" "$SRC/$f" "$APP_DIR/$f" --perms 644; done
 for f in "${DATA[@]}"; do pct push "$CTID" "$SRC/$f" "$APP_DIR/$f" --perms 644; done
-binnen_bash "chmod 755 $APP_DIR/deploy/proxmox/bijwerken.sh && chown -R $GEBRUIKER:$GEBRUIKER $APP_DIR $DATA_DIR"
+binnen_bash "chmod 755 $APP_DIR/deploy/proxmox/*.sh && chown -R $GEBRUIKER:$GEBRUIKER $APP_DIR $DATA_DIR"
 
 # De app moet weten welke versie hij draait; een installatie uit een archief heeft geen .git.
 if [ -n "${COMMIT_VAST:-}" ]; then
@@ -121,7 +123,7 @@ Environment=NODE_ENV=production
 Environment=PORT=$POORT
 Environment=DATA_DIR=$DATA_DIR
 # Bijwerken vanuit de app: dit script haalt de nieuwste versie van GitHub.
-Environment=UPDATE_SCRIPT=$APP_DIR/deploy/proxmox/bijwerken.sh
+Environment=UPDATE_SCRIPT=$APP_DIR/deploy/proxmox/bijwerken-in-de-app.sh
 NoNewPrivileges=yes
 Restart=always
 RestartSec=3

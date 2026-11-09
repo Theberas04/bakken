@@ -1,7 +1,7 @@
 # Bakken op je Proxmox-server
 
 Het installatiescript **maakt zelf een Debian-container** aan (zoals bij de andere apps), op
-poort **8080**, met een systemd-dienst. De gegevens staan in `/var/lib/bakken`, de code in
+poort **80**, met een systemd-dienst. De gegevens staan in `/var/lib/bakken`, de code in
 `/opt/bakken`. Bijwerken laat de gegevens met rust.
 
 ## Installeren (eenmalig)
@@ -12,10 +12,9 @@ Op de Proxmox-host zelf, als root:
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/install.sh)"
 ```
 
-Je hoeft geen container-nummer te weten: het script zoekt een vrij nummer, maakt de container
+Je hoeft geen container-nummer te weten: het script kiest een vrij nummer, maakt de container
 aan, zet Node.js 22 en de dienst erin, en controleert met `/healthz` of de app echt antwoordt.
-Staat Bakken al in een container, dan wordt die opnieuw ingericht in plaats van dat er een
-tweede naast komt.
+Net als bij de andere apps maakt elke installatie een eigen container.
 
 Instellingen voor het aanmaken (allemaal optioneel):
 
@@ -27,7 +26,7 @@ Instellingen voor het aanmaken (allemaal optioneel):
 | `CORES` | `2` | processors |
 | `BRIDGE` | `vmbr0` | netwerkbrug |
 | `OPSLAG` | `local-lvm` | opslag voor de containerschijf |
-| `POORT` | `8080` | poort van de app in de container |
+| `POORT` | `80` | poort van de app in de container |
 
 Alleen de bestanden ophalen, zonder installeren (handig om te proberen):
 
@@ -38,14 +37,17 @@ FETCH_ONLY=1 bash deploy/proxmox/install.sh
 ## Bijwerken
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/bijwerken.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/update-from-github.sh)"
 ```
 
-Ook hier is het nummer optioneel: het script zoekt de container waar Bakken in staat.
+Ook hier is het nummer optioneel: het script zoekt de container waar Bakken in staat. Het maakt
+eerst een reservekopie, controleert daarna of de nieuwste bestanden echt geserveerd worden, en
+zet bij een mislukking de reservekopie terug.
 
-Of vanuit de app: **Beheer → Controleer op een nieuwe versie → Bijwerken**. De app start het
-bijwerken niet zelf; hij toont het commando. Dat is bewust: de app mag de dienst waar hij zelf
-in draait niet herstarten.
+Of vanuit de app: **Beheer → Controleer op een nieuwe versie → Bijwerken**. Dat werkt hetzelfde
+als bij de andere apps: de app haalt de nieuwe bestanden, stopt daarna en systemd start hem
+opnieuw op met de nieuwe code. De pagina wacht en ververscht zichzelf. Er gaat niets verloren;
+de gegevens staan in `/var/lib/bakken` en worden nooit overschreven.
 
 Tijdens een herstart is de app even weg. Achter Cloudflare zie je dan **1033** of **502** —
 dat hoort erbij. Wacht tien tellen en herlaad.
@@ -57,7 +59,7 @@ URL, en dan werken de QR-stickers die je al geplakt hebt niet meer.
 
 1. Maak in het Cloudflare-dashboard een tunnel aan (Zero Trust → Networks → Tunnels) en kies
    de hostnaam waarop de app moet komen.
-2. Zet de publieke hostnaam op de dienst `http://<ip-van-de-container>:8080`.
+2. Zet de publieke hostnaam op de dienst `http://<ip-van-de-container>/`.
 3. Installeer de tunnel als dienst in de container, met het token uit het dashboard:
 
 ```bash
@@ -76,9 +78,17 @@ Camera en installatie als app eisen https. Achter de tunnel krijg je dat gratis;
 
 ## Controleren of alles loopt
 
+Vanaf de host, zonder iets te veranderen:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/check-bakken.sh)"
+```
+
+Of rechtstreeks in de container:
+
 ```bash
 pct exec <nummer> -- systemctl status bakken --no-pager -l | tail -20
-pct exec <nummer> -- curl -fsS http://127.0.0.1:8080/healthz
+pct exec <nummer> -- curl -fsS http://127.0.0.1/healthz
 pct exec <nummer> -- journalctl -u bakken -n 40 --no-pager
 ```
 
@@ -95,7 +105,7 @@ Terugzetten: stop de dienst, pak de tar uit in de container, start de dienst wee
 
 ## Poort veranderen
 
-Standaard 8080. Een andere poort geef je mee bij de installatie:
+Standaard 80 (zo werkt http://<ip>/ meteen). Een andere poort geef je mee bij de installatie:
 
 ```bash
 POORT=8090 bash -c "$(curl -fsSL .../install.sh)"

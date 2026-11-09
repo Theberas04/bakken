@@ -10,6 +10,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { spawnSync } = require('node:child_process');
 
 const db = require('./lib/db');
 const accounts = require('./lib/accounts');
@@ -17,7 +18,7 @@ const rechten = require('./lib/rechten');
 const versie = require('./lib/versie');
 const codes = require('./lib/codes');
 
-const VERSIE = '0.4.1';
+const VERSIE = '0.5.0';
 const REPO = 'Theberas04/bakken';
 const VERSIE_BRON = 'https://raw.githubusercontent.com/' + REPO + '/main/VERSIE.json';
 const UPDATE_SCRIPT_STANDAARD = 'deploy/proxmox/bijwerken-in-de-app.sh';
@@ -160,8 +161,8 @@ function maakApp(opties) {
   }
 
   function updateCommando() {
-    return 'CTID=<nummer> bash -c "$(curl -fsSL https://raw.githubusercontent.com/' + REPO +
-      '/main/deploy/proxmox/bijwerken.sh)"';
+    return 'bash -c "$(curl -fsSL https://raw.githubusercontent.com/' + REPO +
+      '/main/deploy/proxmox/update-from-github.sh)"';
   }
 
   // Wat staat er op GitHub? Alleen om te melden dat er iets nieuws is. Lukt het
@@ -239,6 +240,7 @@ function maakApp(opties) {
       commit: korteCommit(),
       gestartOp,
       updateMogelijk: updateMogelijk(),
+      updateScript: updateMogelijk() ? updateScript : '',
       updateCommando: updateCommando()
     };
   }
@@ -410,6 +412,33 @@ function maakApp(opties) {
         updateMogelijk: updateMogelijk(),
         updateCommando: updateCommando()
       });
+    }
+    // Bijwerken vanuit de app: hetzelfde als bij AkkoordKast. Het script haalt de nieuwste
+    // bestanden van GitHub, legt ze op hun plek en laat de dienst opnieuw starten. Daarna stopt
+    // dit proces; systemd (Restart=always) start hem op met de nieuwe code.
+    if (pad === '/api/update' && methode === 'POST') {
+      if (!eisRecht(res, gebruiker, 'bijwerken')) return;
+      if (!updateMogelijk()) {
+        return stuurJson(res, 400, {
+          fout: 'Bijwerken vanuit de app staat niet aan op deze machine. Draai het bijwerkcommando op je Proxmox-host.',
+          commando: updateCommando()
+        });
+      }
+      const uitkomst = spawnSync('bash', [updateScript], {
+        cwd: __dirname, encoding: 'utf8', timeout: 180000
+      });
+      const uitvoer = ((uitkomst.stdout || '') + (uitkomst.stderr || '')).slice(-4000);
+      if (uitkomst.status === 0) {
+        stuurJson(res, 200, { ok: true, uitvoer, commando: updateScript, herstart: true });
+        console.log('bijgewerkt; de dienst start opnieuw op met de nieuwe versie');
+        setTimeout(() => { try { process.exit(0); } catch (e) { /* al weg */ } }, 1200);
+      } else {
+        stuurJson(res, 500, {
+          fout: 'Het bijwerken stopte met code ' + uitkomst.status + '. De oude versie blijft draaien.',
+          uitvoer, commando: updateScript
+        });
+      }
+      return;
     }
 
     // Instellingen (het adres van de app, voor de QR-links)

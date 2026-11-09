@@ -39,14 +39,14 @@ test('nergens staat een vast container-nummer als voorbeeld', () => {
     const inhoud = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', bestand), 'utf8');
     assert.ok(!/CTID/.test(inhoud), `${bestand} hoort geen CTID te noemen`);
   }
-  for (const script of ['install.sh', 'bijwerken.sh', 'provision-bakken.sh']) {
+  for (const script of ['install.sh', 'update-from-github.sh', 'provision-bakken.sh']) {
     const inhoud = lees(script);
     assert.ok(!/CTID=</.test(inhoud), `${script} hoort geen CTID=<nummer> als voorbeeld te tonen`);
   }
 });
 
 test('bijwerken zoekt de container zelf', () => {
-  const bij = lees('bijwerken.sh');
+  const bij = lees('update-from-github.sh');
   assert.match(bij, /pct list/, 'bijwerken hoort de containers te doorzoeken als er geen nummer is');
   assert.ok(!/Gebruik: CTID=<nummer>/.test(bij), 'bijwerken hoort niet meteen om een nummer te vragen');
 });

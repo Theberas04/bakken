@@ -47,14 +47,21 @@ Gegevens horen buiten dit repo: `DATA_DIR`, `DB_PATH` en `MEDIA_DIR` wijzen ze a
 - [x] QR-generator en printvel (48 stickers op A4)
 - [x] PWA: manifest, pictogram, service worker met de app-schil in de cache
 - [ ] PWA: foto's offline opvangen
+- [x] Bijwerken vanuit de app (knop in de beheerkaart), met terugval op de host
 - [x] Proxmox-installatie en Cloudflare-tunnel (zie `deploy/proxmox/README.md`)
 
 ## Installeren op je Proxmox-server
 
-Vanaf de host (het script maakt zelf een Debian-container aan):
+Vanaf de host (het script maakt zelf een Debian-container aan, op poort 80):
 
     bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/install.sh)"
 
-Bijwerken: zie `deploy/proxmox/README.md`. Gebruik een Cloudflare **named** tunnel met een
+Bijwerken kan daarna vanuit de app (knop **Bijwerken** in de beheerkaart) of vanaf de host:
+
+    bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/update-from-github.sh)"
+
+Kijken of alles goed staat, zonder iets te veranderen:
+
+    bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/check-bakken.sh)" Gebruik een Cloudflare **named** tunnel met een
 vaste hostnaam; een quick tunnel geeft elke keer een nieuwe URL en dan werken geplakte
 stickers niet meer. Camera en installeren als app eisen https.

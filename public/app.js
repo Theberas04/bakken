@@ -822,9 +822,44 @@
     });
 
     var bijwerken = $('#bijwerken');
-    if (bijwerken) bijwerken.addEventListener('click', function () {
-      toonMelding('#versie-melding', 'Bijwerken gebeurt op de host, niet hier. Het commando staat in de README. ' +
-        'De app is daarna even niet bereikbaar (Cloudflare 1033 of 502); wacht tien tellen en herlaad.', 'let-op');
+    if (bijwerken) bijwerken.addEventListener('click', async function () {
+      toonMelding('#versie-melding',
+        'Bezig met bijwerken… De app stopt zo en start opnieuw. In die paar seconden is het adres even niet ' +
+        'bereikbaar: zie je een foutmelding van Cloudflare (1033 of 502), wacht dan tien tellen en ververs ' +
+        'de pagina. Er gaat niets verloren.', 'let-op');
+      var uit;
+      try {
+        uit = await api('/api/update', { methode: 'POST' });
+      } catch (e) {
+        toonMelding('#versie-melding', e.message, 'fout');
+        return;
+      }
+      if (!uit.herstart) {
+        toonMelding('#versie-melding', 'Bijgewerkt. ' + String(uit.uitvoer || '').split('\n').slice(-3).join(' '), 'goed');
+        setTimeout(function () { location.reload(); }, 2500);
+        return;
+      }
+      // De dienst stopt en komt met de nieuwe versie terug; wachten tot hij antwoordt.
+      toonMelding('#versie-melding', 'De nieuwe bestanden staan er. De app start opnieuw op…', 'let-op');
+      var pogingen = 0;
+      var wacht = function () {
+        pogingen += 1;
+        api('/api/versie?r=' + Date.now()).then(function (d) {
+          if (d && d.versie) {
+            toonMelding('#versie-melding', 'Klaar: de app draait nu versie ' + d.versie + '. De pagina wordt ververscht.', 'goed');
+            setTimeout(function () { location.reload(); }, 1800);
+            return;
+          }
+          throw new Error('nog niet');
+        }).catch(function () {
+          if (pogingen > 40) {
+            toonMelding('#versie-melding', 'De app gaf nog geen antwoord. Ververs de pagina om te kijken of hij er weer is.', 'fout');
+            return;
+          }
+          setTimeout(wacht, 1000);
+        });
+      };
+      setTimeout(wacht, 2500);
     });
 
     var bewaarBasis = $('#bewaar-basis');

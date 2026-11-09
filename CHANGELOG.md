@@ -1,5 +1,15 @@
 # Wat er per versie veranderd is
 
+## 0.5.0 - 9 november 2026
+- Bijwerken vanuit de app: de knop "Bijwerken" haalt nu zelf de nieuwste versie van GitHub, net
+  als bij de andere apps. De dienst stopt daarna en systemd start hem opnieuw op met de nieuwe
+  code. Mislukt het bijwerken, dan blijft de oude versie draaien en zie je de uitvoer.
+- Het host-script heet nu `update-from-github.sh` (was `bijwerken.sh`) en maakt eerst een
+  reservekopie in de container, controleert daarna of de nieuwste bestanden echt geserveerd
+  worden, en zet bij een mislukking de reservekopie terug.
+- `check-bakken.sh`: alleen-lezen diagnose van een Bakken-container.
+- De app draait op **poort 80**, zodat http://<ip>/ meteen werkt.
+
 ## 0.4.1 - 9 november 2026
 - De verwijzing naar een vast container-nummer is uit de installatie- en bijwerk-instructies
   gehaald: de commando's vragen er nergens meer om.
