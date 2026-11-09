@@ -33,14 +33,38 @@ if [ "$(id -u)" != "0" ]; then
   exit 1
 fi
 
+# Is dit nummer al in gebruik? Let op: 'pct' kent alleen containers. Een gewone VM met dat
+# nummer meldt zich daar niet, en dan kiest dit script een nummer dat al bezet is — 'pct create'
+# stopt dan met "VM <nummer> already exists". Daarom kijken we ook met 'qm' en naar de
+# configuratiebestanden van beide soorten.
+nummer_bezet() {
+  local id="$1"
+  pct status "$id" >/dev/null 2>&1 && return 0
+  if command -v qm >/dev/null 2>&1; then
+    qm status "$id" >/dev/null 2>&1 && return 0
+  fi
+  local knoop
+  knoop="$(hostname)"
+  [ -f "/etc/pve/nodes/$knoop/lxc/$id.conf" ] && return 0
+  [ -f "/etc/pve/nodes/$knoop/qemu-server/$id.conf" ] && return 0
+  # Op een host met meerdere knopen kan het nummer op een andere knoop staan.
+  compgen -G "/etc/pve/nodes/*/lxc/$id.conf" >/dev/null 2>&1 && return 0
+  compgen -G "/etc/pve/nodes/*/qemu-server/$id.conf" >/dev/null 2>&1 && return 0
+  return 1
+}
+
 # Vrije container-id zoeken als er geen is opgegeven.
 if [ -z "$CTID" ]; then
   for kandidaat in $(seq "${CTID_VANAF:-100}" 299); do
-    if ! pct status "$kandidaat" >/dev/null 2>&1; then CTID="$kandidaat"; break; fi
+    if ! nummer_bezet "$kandidaat"; then CTID="$kandidaat"; break; fi
   done
 fi
-if pct status "$CTID" >/dev/null 2>&1; then
-  melding "Container $CTID bestaat al. Kies een andere CTID of verwijder hem eerst."
+if [ -z "$CTID" ]; then
+  melding "Geen vrij nummer gevonden tussen ${CTID_VANAF:-100} en 299. Geef er zelf een: CTID=<nummer>."
+  exit 1
+fi
+if nummer_bezet "$CTID"; then
+  melding "Nummer $CTID is al in gebruik (container of VM). Kies een ander nummer of verwijder het eerst."
   exit 1
 fi
 

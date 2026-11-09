@@ -1,5 +1,10 @@
 # Wat er per versie veranderd is
 
+## 0.5.1 - 9 november 2026
+- De installer koos een nummer dat al door een **gewone VM** in gebruik was (`pct` ziet alleen
+  containers). Hij kijkt nu ook met `qm` en naar de configuratiebestanden van containers en VM's,
+  en stopt met een duidelijke melding als er geen vrij nummer is.
+
 ## 0.5.0 - 9 november 2026
 - Bijwerken vanuit de app: de knop "Bijwerken" haalt nu zelf de nieuwste versie van GitHub, net
   als bij de andere apps. De dienst stopt daarna en systemd start hem opnieuw op met de nieuwe

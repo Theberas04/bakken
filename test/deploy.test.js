@@ -19,6 +19,13 @@ test('het installatiescript maakt zelf een container aan', () => {
   assert.match(aanmaak, /^\s*echo "\$CTID"\s*$/m, 'het aanmaakscript hoort alleen het nummer op stdout te zetten');
 });
 
+test('het aanmaakscript slaat nummers van gewone VM\'s over', () => {
+  const aanmaak = lees('create-bakken-lxc.sh');
+  assert.match(aanmaak, /qm status/, 'een nummer van een VM (qm) hoort ook als bezet te tellen');
+  assert.match(aanmaak, /qemu-server/, 'het configuratiebestand van een VM hoort mee te tellen');
+  assert.match(aanmaak, /Geen vrij nummer gevonden/, 'zonder vrij nummer hoort het script eerlijk te stoppen');
+});
+
 test('elk script dat de installer uitvoert staat in de bestandenlijst', () => {
   const install = lees('install.sh');
   const lijst = install.slice(install.indexOf('FILES=('), install.indexOf(')\n', install.indexOf('FILES=(')));
