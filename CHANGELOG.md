@@ -1,5 +1,9 @@
 # Wat er per versie veranderd is
 
+## 0.4.1 - 9 november 2026
+- De verwijzing naar een vast container-nummer is uit de installatie- en bijwerk-instructies
+  gehaald: de commando's vragen er nergens meer om.
+
 ## 0.4.0 - 9 november 2026
 - Het installatiescript maakt zelf een Debian-container aan (zoals bij de andere apps), in
   plaats van een bestaande container te vragen. Staat Bakken al in een container, dan wordt die

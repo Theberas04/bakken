@@ -34,6 +34,17 @@ test('de one-liner vraagt geen container-nummer', () => {
   assert.match(kop, /create-bakken-lxc\.sh/, 'de kop hoort te vertellen dat er een container wordt gemaakt');
 });
 
+test('nergens staat een vast container-nummer als voorbeeld', () => {
+  for (const bestand of ['README.md', 'deploy/proxmox/README.md']) {
+    const inhoud = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', bestand), 'utf8');
+    assert.ok(!/CTID/.test(inhoud), `${bestand} hoort geen CTID te noemen`);
+  }
+  for (const script of ['install.sh', 'bijwerken.sh', 'provision-bakken.sh']) {
+    const inhoud = lees(script);
+    assert.ok(!/CTID=</.test(inhoud), `${script} hoort geen CTID=<nummer> als voorbeeld te tonen`);
+  }
+});
+
 test('bijwerken zoekt de container zelf', () => {
   const bij = lees('bijwerken.sh');
   assert.match(bij, /pct list/, 'bijwerken hoort de containers te doorzoeken als er geen nummer is');

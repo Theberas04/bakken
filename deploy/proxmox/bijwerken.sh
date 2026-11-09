@@ -5,8 +5,7 @@
 #
 #   bash -c "$(curl -fsSL https://raw.githubusercontent.com/Theberas04/bakken/main/deploy/proxmox/bijwerken.sh)"
 #
-# Je hoeft geen container-nummer te weten: het script zoekt de container waar
-# Bakken in staat. CTID=<nummer> meegeven mag ook.
+# Je hoeft geen container-nummer te weten: het script zoekt de container waar Bakken in staat.
 #
 # Het haalt de bestanden van de nieuwste commit op, stuurt ze naar de bestaande
 # container en herstart de dienst. De gegevens in DATA_DIR blijven staan.
@@ -44,7 +43,7 @@ if [ -z "$CTID" ]; then
     if [ -e /dev/tty ]; then
       read -r -p "Welk container-nummer? " CTID < /dev/tty
     else
-      echo "Geef het nummer mee: CTID=<nummer> bash -c \"\$(curl -fsSL .../bijwerken.sh)\"" >&2
+      echo "Geef het nummer mee: bash -c \"\$(curl -fsSL .../bijwerken.sh)\" <nummer>" >&2
       exit 1
     fi
   fi

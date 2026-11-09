@@ -11,7 +11,7 @@
 #   3. richt de container in en start de dienst (provision-bakken.sh).
 #
 # Staat Bakken al in een container, dan wordt die opnieuw ingericht in plaats van dat er een
-# tweede bij komt. Een nummer meegeven mag ook: CTID=<nummer> bash -c "$(curl -fsSL …)".
+# tweede bij komt.
 #
 # Alleen de bestanden ophalen, zonder container:
 #   FETCH_ONLY=1 bash deploy/proxmox/install.sh
@@ -45,7 +45,7 @@ if [ "${RAW_BASE#file://}" = "$RAW_BASE" ] && [ -z "${COMMIT_VAST:-}" ]; then
   fi
 fi
 
-PAKKET_VERSIE="2026-11-09.2"
+PAKKET_VERSIE="2026-11-09.3"
 
 FILES=(
   "server.js"

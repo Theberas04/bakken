@@ -21,7 +21,6 @@ Instellingen voor het aanmaken (allemaal optioneel):
 
 | Variabele | Standaard | Betekenis |
 |---|---|---|
-| `CTID` | eerste vrije vanaf 100 | nummer van de nieuwe container |
 | `HOSTNAME_CT` | `bakken` | hostnaam in de container |
 | `GEHEUGEN` | `1024` | geheugen in MB |
 | `SCHIJF` | `8` | schijf in GB |
