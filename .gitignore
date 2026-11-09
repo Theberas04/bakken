@@ -1,0 +1,13 @@
+# Gegevens en sleutels horen niet in het repo
+data/
+*.db
+*.db-wal
+*.db-shm
+keystore/
+*.p12
+*.keystore
+node_modules/
+
+# Proefbestanden
+/tmp/
+*.log
